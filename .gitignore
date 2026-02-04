@@ -1,5 +1,5 @@
 #################################
-# macOS
+# OS / system
 #################################
 .DS_Store
 .AppleDouble
@@ -11,11 +11,19 @@ Icon?
 .fseventsd
 
 #################################
-# Python / caches
+# Python
 #################################
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Packaging / builds
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
 
 #################################
 # Virtual environments
@@ -29,6 +37,7 @@ ENV/
 # Jupyter
 #################################
 .ipynb_checkpoints/
+**/.ipynb_checkpoints/
 
 #################################
 # Tests / coverage
@@ -72,26 +81,32 @@ pip-log.txt
 !.env.example
 
 #################################
-# Build artifacts
+# Data (DO NOT COMMIT)
 #################################
-build/
-dist/
-*.egg-info/
+# Ignore everything under data, but keep folder structure
+data/**
+!data/.gitkeep
+!data/**/.gitkeep
 
 #################################
-# Data (ignore heavy datasets)
+# Common ML outputs (usually huge)
 #################################
-data/images/*
-data/annotations/*
-!data/images/.gitkeep
-!data/annotations/.gitkeep
+outputs/
+results/
+runs/
+models/
+checkpoints/
+wandb/
+mlruns/
+lightning_logs/
+tensorboard/
 
 #################################
-# Report (keep slides + notes, ignore temp)
+# Report temp files
 #################################
-# macOS Office temp files
 report/~$*
-# LaTeX (si jamais tu utilises)
+
+# LaTeX (optional)
 report/**/*.aux
 report/**/*.bbl
 report/**/*.blg
@@ -101,12 +116,3 @@ report/**/*.toc
 report/**/*.synctex.gz
 report/**/*.fdb_latexmk
 report/**/*.fls
-
-#################################
-# Optional: common outputs
-#################################
-outputs/
-results/
-runs/
-models/
-checkpoints/
