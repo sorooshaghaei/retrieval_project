@@ -1,7 +1,9 @@
-pandas, 
-numpy, 
-# scikit-learn, 
-# rank_bm25, 
-# tqdm, 
-# nltk, 
-jupyter
+numpy 
+matplotlib
+pandas
+# sentence-transformers
+# seaborn # --> for drawing charts
+# scikit-learn
+# rank_bm25
+# tqdm
+# nltk
