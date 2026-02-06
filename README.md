@@ -41,8 +41,13 @@ Build a system that, for every query, **retrieves and ranks** the most relevant 
 │   ├── queries_test.json
 │   └── qgts_train.json
 ├── notebooks/                #Jupyter notebooks for wxplains & experiments
-├── src/                      
+│   ├── basic_analysis.ipynb
+├── src/    
+│   ├── preprocess.py
+│   ├── utils.py                  
 ├── outputs/                  # GIT IGNORED (Logs, metrics, submission files)
+│   ├── runs/
+│   ├── submission.csv
 ├── report/                   # Slides, notes, and final report assets
 ├── .gitignore                
 ├── PIPELINE.md               #explanation of our workflow
