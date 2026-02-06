@@ -1,8 +1,8 @@
 numpy 
 matplotlib
 pandas
+jupyter
 # sentence-transformers
-# seaborn # --> for drawing charts
 # scikit-learn
 # rank_bm25
 # tqdm
