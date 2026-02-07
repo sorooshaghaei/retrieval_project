@@ -43,8 +43,11 @@ Build a system that, for every query, **retrieves and ranks** the most relevant 
 ├── notebooks/                #Jupyter notebooks for wxplains & experiments
 │   ├── basic_analysis.ipynb
 ├── src/    
+│   ├── __init__.py           # python package
 │   ├── preprocess.py
-│   ├── utils.py                  
+│   ├── utils.py
+│   ├── models.py             # logic goes here
+│   └── evaluation.py         # Calculates Precision/Recall         
 ├── outputs/                  # GIT IGNORED (Logs, metrics, submission files)
 │   ├── runs/
 │   ├── submission.csv
@@ -52,6 +55,7 @@ Build a system that, for every query, **retrieves and ranks** the most relevant 
 ├── .gitignore                
 ├── PIPELINE.md               #explanation of our workflow
 ├── requirements.txt          #dependencies
+├── main.py                   #Runs the whole machine  
 └── README.md  
 ```
 
@@ -86,21 +90,6 @@ pip install numpy pandas tqdm scikit-learn rank_bm25 nltk
 Download the dataset from Kaggle and place the JSON files into data.
 
 4. Running the Pipeline
-We could??? use a modular pipeline approach, yet not sure! . You can run individual stages or the full workflow.
-A. Exploration & Stats:
-```Bash
-python -m src.explore --data_dir data
-```
-
-B. Preprocessing:
-```Bash
-python -m src.preprocess --input data --output data
-```
-
-C. Baseline Model (TF-IDF/BM25):
-```Bash
-python -m src.baseline --data data --out outputs/submission.csv
-```
 
 Evaluation
 We evaluate our models using the provided training relevance judgments (qrels). Key metrics include:

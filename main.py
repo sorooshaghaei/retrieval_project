@@ -1,3 +1,6 @@
+# Runs the whole machine
+# baseline.py codes are moved to here
+
 """
 retrieval pipeline looks like this:
     - Load Data.
@@ -8,8 +11,8 @@ retrieval pipeline looks like this:
 
 import pandas as pd
 import os
-from .utils import load_data
-from .preprocess import create_content_column
+from src.utils import load_data
+from src.preprocess import create_content_column
 
 
 DATA_DIR = "data"  # Folder where json files are
