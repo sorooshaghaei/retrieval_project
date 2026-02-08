@@ -83,7 +83,7 @@ pip install -r requirements.txt
 
 # Or manually:
 ```bash
-pip install numpy pandas tqdm scikit-learn rank_bm25 nltk
+pip install numpy pandas tqdm scikit-learn rank_bm25 nltk sentence-transformers torch
 ```
 
 3. Data Ingestion
