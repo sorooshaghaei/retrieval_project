@@ -12,9 +12,15 @@ retrieval pipeline looks like this:
 import pandas as pd
 import os
 from src.utils import load_data
+from src.evaluation import evaluate_retrieval
 from src.preprocess import create_content_column
+from rank_bm25 import BM25Plus
+import nltk
+nltk.download('punkt')
+nltk.download('punkt_tab')
+from nltk.tokenize import word_tokenize
 
-
+import numpy as np
 DATA_DIR = "data"  # Folder where json files are
 OUTPUT_DIR = "outputs"  # Folder where submission.csv goes
 TOP_K = 10  # How many docs to retrieve per query
@@ -26,6 +32,11 @@ def run_baseline():
     print("--- 1. Loading Data ---")
     docs_df, train_queries_df, test_queries_df, qrels = load_data(DATA_DIR)
 
+    # Process qrels to extract list of doc_ids
+    qrels_processed = {}
+    for qid, info in qrels.items():
+        qrels_processed[str(qid)] = [str(item['doc_id']) for item in info.get('relevant_doc_ids', [])]
+
     # 2. PREPROCESS
     # -----------------------------------------------------
     print("--- 2. Preprocessing ---")
@@ -33,42 +44,82 @@ def run_baseline():
     print("Processing Documents...")
     docs_processed = create_content_column(docs_df, ["title", "text", "tags"])
 
+    # Ensure doc id is string (normalize)
+    docs_processed['id'] = docs_processed['id'].astype(str)
+
+    # Lowercase and tokenize content
+    docs_processed['tokens'] = docs_processed['content'].fillna("").apply(
+        lambda txt: [t.lower() for t in word_tokenize(str(txt))]
+    )
+
     # For Queries: Merge title + text (queries might not have tags, check first)
     print("Processing Queries...")
-    # Note: Adjust columns based on what exists in queries_test.json
+    train_queries_processed = create_content_column(train_queries_df, ["title", "text"])
     test_queries_processed = create_content_column(test_queries_df, ["title", "text"])
+
+    # Normalize query ids to string
+    train_queries_processed['id'] = train_queries_processed['id'].astype(str)
+    test_queries_processed['id'] = test_queries_processed['id'].astype(str)
+
+    # Lowercase + tokenize queries
+    train_queries_processed['tokens'] = train_queries_processed['content'].fillna("").apply(
+        lambda txt: [t.lower() for t in word_tokenize(str(txt))]
+    )
+    test_queries_processed['tokens'] = test_queries_processed['content'].fillna("").apply(
+        lambda txt: [t.lower() for t in word_tokenize(str(txt))]
+    )
 
     # 3. RETRIEVAL MODEL
     # -----------------------------------------------------
     print("--- 3. Running Retrieval Model ---")
+    corpus = docs_processed['tokens'].tolist()
+    bm25 = BM25Plus(corpus)
 
-    # Currently, this is a DUMMY implementation that just returns random docs.
-    # TEAMATES TODO: it will be replaced with TF-IDF or BM25 later.
+    results_train = []
+    results_test = []
 
-    results = []
+    # Loop over every train query for evaluation
+    for _, row in train_queries_processed.iterrows():
+        query_id = str(row["id"])
+        query_tokens = row['tokens']
+        # BM25 retrieval
+        doc_scores = bm25.get_scores(query_tokens)
+        topk_indices = np.argsort(doc_scores)[-TOP_K:][::-1]
+        top_docs = docs_processed["id"].iloc[topk_indices].tolist()
+        # Make sure returned doc ids are strings
+        top_docs = [str(d) for d in top_docs]
+        result = {"query_id": query_id, "relevant_docs": top_docs}
+        results_train.append(result)
 
-    # Loop over every test query
-    for index, row in test_queries_processed.iterrows():
-        query_id = row["id"]
+    # Loop over every test query for submission
+    for _, row in test_queries_processed.iterrows():
+        query_id = str(row["id"])
+        query_tokens = row['tokens']
+        doc_scores = bm25.get_scores(query_tokens)
+        topk_indices = np.argsort(doc_scores)[-TOP_K:][::-1]
+        top_docs = docs_processed["id"].iloc[topk_indices].tolist()
+        top_docs = [str(d) for d in top_docs]
+        result = {"query_id": query_id, "relevant_docs": top_docs}
+        results_test.append(result)
 
-        # ------------ START MODEL LOGIC ------------
-        # (This is where we will add TF-IDF later)
-        # foe now, let's just take the first 10 docs as a placeholder
-        top_docs = docs_processed["id"].head(TOP_K).tolist()
-        # ------------ END MODEL LOGIC ------------
+    # Optional: quick debug print for first 3 queries
+    print("Sample retrieval (first 3 train queries):")
+    for sample in results_train[:3]:
+        print(sample)
 
-        results.append({"query_id": query_id, "relevant_docs": top_docs})
+    # Evaluate the retrieval results
+    print("--- Evaluating Retrieval ---")
+    metrics = evaluate_retrieval(results_train, qrels_processed, TOP_K)
+
+    print(f"Average Recall@{TOP_K}: {metrics['avg_recall']:.4f}")
+    print(f"Average Precision@{TOP_K}: {metrics['avg_precision']:.4f}")
+    print(f"MRR@{TOP_K}: {metrics['mrr']:.4f}")
 
     # 4. FORMAT SUBMISSION
     # -----------------------------------------------------
     print("--- 4. Saving Submission ---")
-    # Kaggle requires specific format
-    # This part depends on the specific Kaggle submission.csv format
-    # will be refined this later....
+    results_df = pd.DataFrame(results_test)
 
-    results_df = pd.DataFrame(results)
-
-    # make sure output directory exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     output_path = os.path.join(OUTPUT_DIR, "submission_baseline.csv")
     results_df.to_csv(output_path, index=False)
