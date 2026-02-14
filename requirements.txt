@@ -6,3 +6,5 @@ scikit-learn          # For TF-IDF and Cosine Similarity
 rank_bm25             # For the BM25 model
 sentence-transformers # For the advanced model
 torch                 # Dependency for sentence-transformers
+rank_bm25
+nltk
