@@ -21,6 +21,7 @@ DATA_DIR = "data"
 OUTPUT_DIR = "outputs"
 TOP_K = 10
 SUBMISSION_K = 100
+TEAM_NAME = "SeaFour"
 
 import csv
 import json
@@ -134,17 +135,32 @@ def run_pipeline():
     # )
 
     # 4. SUBMISSION (TEST SET)
-    print("\n--- GENERATING SUBMISSION ---")
+
+    print("\n--- GENERATING SUBMISSIONS ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    sample_path = os.path.join(DATA_DIR, "submission.csv") # kaggle template
-    output_path = os.path.join(OUTPUT_DIR, "solutions_SeaFour.csv") # what we upload
+    template_path = os.path.join(DATA_DIR, "submission.csv")  # Kaggle template
 
+    # bm25 submission (top 100)
     bm25_test = run_bm25_search(docs, test_queries, SUBMISSION_K)
-    bm25_test = run_tfidf_search(docs, test_queries, SUBMISSION_K)
-    write_kaggle_submission(bm25_test, sample_path, output_path)
+    bm25_path = os.path.join(OUTPUT_DIR, f"solutions_{TEAM_NAME}_bm25.csv")
+    write_kaggle_submission(bm25_test, template_path, bm25_path)
+    print("-> saved:", bm25_path)
 
-    print("-> outputs/submission.csv saved (Kaggle format)")
+    # tf-idf submission (top 100) 
+    tfidf_test = run_tfidf_search(docs, test_queries, SUBMISSION_K)
+    tfidf_path = os.path.join(OUTPUT_DIR, f"solutions_{TEAM_NAME}_tfidf.csv")
+    write_kaggle_submission(tfidf_test, template_path, tfidf_path)
+    print("-> saved:", tfidf_path)
+
+    # must be exactly solutions_SeaFour.csv
+    # replace bellow "???" with final choosed algorith model !!!!!
+    # upload_path = os.path.join(OUTPUT_DIR, f"solutions_{TEAM_NAME}.csv")
+    # write_kaggle_submission( ??? , template_path, ???_path)
+    # print("-->>>> upload-ready file:", upload_path)
+
+
+    print("-> outputs/solutions_SeaFour.csv saved (Kaggle format)")
     print("Done!")
 
 if __name__ == "__main__":
