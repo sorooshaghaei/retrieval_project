@@ -21,6 +21,14 @@ DATA_DIR = "data"
 OUTPUT_DIR = "outputs"
 TOP_K = 10
 
+# helper formating function
+def format_for_submission(results):
+    df = pd.DataFrame(results)
+    df["query_id"] = df["query_id"].astype(str)
+
+    # Common Kaggle format for ranked doc ids:
+    df["relevant_docs"] = df["relevant_docs"].apply(lambda xs: " ".join(map(str, xs)))
+    return df
 
 def run_pipeline():
     # 1. LOAD
@@ -32,9 +40,8 @@ def run_pipeline():
     print("Processing Ground Truth (Qrels)...")
     qrels = {}
     for qid, info in qrels_raw.items():
-        # extract the list of relevant IDs from the inner dictionary
-        relevant_list = [item["doc_id"] for item in info["relevant_doc_ids"]]
-        qrels[qid] = relevant_list
+        # extract the list of relevant doc_ids from the inner dictionary
+        qrels[str(qid)] = [str(item["doc_id"]) for item in info["relevant_doc_ids"]]
 
     # 2. PREPROCESS
     print("--- 2. Preprocessing ---")
@@ -71,13 +78,23 @@ def run_pipeline():
 
     # 4. SUBMISSION (TEST SET)
     print("\n--- GENERATING SUBMISSION ---")
-    final_results = run_bm25_search(docs, test_queries, TOP_K)
-
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    pd.DataFrame(final_results).to_csv(
-        os.path.join(OUTPUT_DIR, "submission.csv"), index=False
-    )
-    print("Done.")
+
+    # TF-IDF submission (on test)
+    tfidf_test = run_tfidf_search(docs, test_queries, TOP_K)
+    sub_tfidf = format_for_submission(tfidf_test)
+    sub_tfidf.to_csv(os.path.join(OUTPUT_DIR, "submission_tfidf.csv"), index=False)
+
+
+    # BM25 submission (on test)
+    bm25_test = run_bm25_search(docs, test_queries, TOP_K)
+    sub_bm25 = format_for_submission(bm25_test)
+    sub_bm25.to_csv(os.path.join(OUTPUT_DIR, "submission_bm25.csv"), index=False)
+
+    print(f"→ submission_bm25.csv saved")
+    print(f"→ submission_tfidf.csv saved")
+    print("Done!")
+
 
 
 if __name__ == "__main__":
