@@ -20,15 +20,71 @@ from src.models import run_tfidf_search, run_bm25_search, embed_retrieve
 DATA_DIR = "data"
 OUTPUT_DIR = "outputs"
 TOP_K = 10
+SUBMISSION_K = 100
 
-# helper formating function
-def format_for_submission(results):
-    df = pd.DataFrame(results)
-    df["query_id"] = df["query_id"].astype(str)
+import csv
+import json
 
-    # Common Kaggle format for ranked doc ids:
-    df["relevant_docs"] = df["relevant_docs"].apply(lambda xs: " ".join(map(str, xs)))
-    return df
+
+def write_kaggle_submission(results, sample_csv_path, output_csv_path):
+
+    # 1) Build a mapping: query_id -> list of doc_ids (as strings)
+    pred_map = {}
+    for item in results:
+        qid = str(item["query_id"])
+        doc_list = item["relevant_docs"]
+
+        doc_list_str = []
+        for d in doc_list:
+            doc_list_str.append(str(d))
+
+        pred_map[qid] = doc_list_str
+
+    # 2) Read the sample
+    with open(sample_csv_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        fieldnames = (
+            reader.fieldnames
+        )  # e.g. ["query_id", "relevant_doc_ids", "category"]
+
+        sample_rows = []
+        for row in reader:
+            sample_rows.append(row)
+
+    # Safety
+    if fieldnames is None or len(fieldnames) < 2:
+        raise ValueError("Sample submission CSV must have at least 2 columns.")
+
+    id_col = fieldnames[0]
+    pred_col = fieldnames[1]
+    cat_col = fieldnames[2] if len(fieldnames) >= 3 else None
+
+    # 3) Write output rows following the sample order
+    with open(output_csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for row in sample_rows:
+            qid = str(row[id_col])
+
+            if qid not in pred_map:
+                raise ValueError("Missing prediction for query_id: " + qid)
+
+            out_row = {}
+            out_row[id_col] = qid
+
+            # **IMPORTANT**: Kaggle expects JSON string
+            out_row[pred_col] = json.dumps(pred_map[qid])
+
+            # Keep the sample's category value if it exists, otherwise use "?"
+            if cat_col is not None:
+                sample_cat = row.get(cat_col, "?")
+                if sample_cat == "" or sample_cat is None:
+                    sample_cat = "?"
+                out_row[cat_col] = sample_cat
+
+            writer.writerow(out_row)
+
 
 def run_pipeline():
     # 1. LOAD
@@ -60,47 +116,39 @@ def run_pipeline():
     bm25_metrics = evaluate_retrieval(bm25_results, qrels, TOP_K)
     print(f"Precision@{TOP_K}: {bm25_metrics['avg_precision']:.4f}")
 
-    print("\n--- SEMANTIC SEARCH (DEEP LEARNING) ---")
-    # We will test on a tiny slice first to prevent freezing.
-    # LIMIT DATA FOR TESTING: Take only first 100 queries to test speed
-    semantic_results = embed_retrieve(docs, train_queries.head(100), TOP_K)
+    # uncomment if you want to test semantic search(it takes 1 hour to run!)
+    # print("\n--- SEMANTIC SEARCH (DEEP LEARNING) ---")
+    # # We will test on a tiny slice first to prevent freezing.
+    # # LIMIT DATA FOR TESTING: Take only first 10 queries to test speed
+    # semantic_results = embed_retrieve(docs, train_queries.head(10), TOP_K)
 
-    # must only evaluate the queries we actually ran
-    # slice the qrels dictionary to match our 100 queries
-    # qrels_subset = {k: qrels[k] for k in train_queries.head(100)["id"] if k in qrels}
-    ids_100 = train_queries.head(100)["id"].astype(str).tolist()
-    qrels_subset = {qid: qrels.get(qid, []) for qid in ids_100}
+    # # must only evaluate the queries we actually ran
+    # # slice the qrels dictionary to match our 10 queries
+    # # qrels_subset = {k: qrels[k] for k in train_queries.head(10)["id"] if k in qrels}
+    # ids_10 = train_queries.head(10)["id"].astype(str).tolist()
+    # qrels_subset = {qid: qrels.get(qid, []) for qid in ids_10}
 
-    semantic_metrics = evaluate_retrieval(semantic_results, qrels_subset, TOP_K)
-    print(
-        f"Precision@{TOP_K} (First 100 queries): {semantic_metrics['avg_precision']:.4f}"
-    )
+    # semantic_metrics = evaluate_retrieval(semantic_results, qrels_subset, TOP_K)
+    # print(
+    #     f"Precision@{TOP_K} (First 10 queries): {semantic_metrics['avg_precision']:.4f}"
+    # )
 
     # 4. SUBMISSION (TEST SET)
     print("\n--- GENERATING SUBMISSION ---")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # TF-IDF submission (on test)
-    tfidf_test = run_tfidf_search(docs, test_queries, TOP_K)
-    sub_tfidf = format_for_submission(tfidf_test)
-    sub_tfidf.to_csv(os.path.join(OUTPUT_DIR, "submission_tfidf.csv"), index=False)
+    sample_path = os.path.join(DATA_DIR, "submission.csv") # kaggle template
+    output_path = os.path.join(OUTPUT_DIR, "solutions_SeaFour.csv") # what we upload
 
+    bm25_test = run_bm25_search(docs, test_queries, SUBMISSION_K)
+    bm25_test = run_tfidf_search(docs, test_queries, SUBMISSION_K)
+    write_kaggle_submission(bm25_test, sample_path, output_path)
 
-    # BM25 submission (on test)
-    bm25_test = run_bm25_search(docs, test_queries, TOP_K)
-    sub_bm25 = format_for_submission(bm25_test)
-    sub_bm25.to_csv(os.path.join(OUTPUT_DIR, "submission_bm25.csv"), index=False)
-
-    print(f"→ submission_bm25.csv saved")
-    print(f"→ submission_tfidf.csv saved")
+    print("-> outputs/submission.csv saved (Kaggle format)")
     print("Done!")
-
-
 
 if __name__ == "__main__":
     run_pipeline()
-
-
 
 
 # -----------old codes----------------------
