@@ -1,14 +1,3 @@
-# old codes are in the end of this file
-
-# main.py runs the whole machine
-"""
-retrieval pipeline looks like this:
-    - Load Data.
-    - Preprocess (Make the 'content' column).
-    - Run Model (algorithms).
-    - Save Results.(submissions)
-"""
-
 import pandas as pd
 import os
 from src.utils import load_data
@@ -110,12 +99,17 @@ def run_pipeline():
     print("\n--- TF-IDF EVALUATION ---")
     tfidf_results = run_tfidf_search(docs, train_queries, TOP_K)
     tfidf_metrics = evaluate_retrieval(tfidf_results, qrels, TOP_K)
-    print(f"Precision@{TOP_K}: {tfidf_metrics['avg_precision']:.4f}")
+    print(f"Average Recall@{TOP_K}:    {tfidf_metrics['avg_recall']:.4f}")
+    print(f"Average Precision@{TOP_K}: {tfidf_metrics['avg_precision']:.4f}")
+    print(f"MRR@{TOP_K}:               {tfidf_metrics['mrr']:.4f}")
 
     print("\n--- BM25 EVALUATION ---")
     bm25_results = run_bm25_search(docs, train_queries, TOP_K)
     bm25_metrics = evaluate_retrieval(bm25_results, qrels, TOP_K)
-    print(f"Precision@{TOP_K}: {bm25_metrics['avg_precision']:.4f}")
+    print(f"Average Recall@{TOP_K}:    {bm25_metrics['avg_recall']:.4f}")
+    print(f"Average Precision@{TOP_K}: {bm25_metrics['avg_precision']:.4f}")
+    print(f"MRR@{TOP_K}:               {bm25_metrics['mrr']:.4f}")
+
 
     # uncomment if you want to test semantic search(it takes 1 hour to run!)
     # print("\n--- SEMANTIC SEARCH (DEEP LEARNING) ---")

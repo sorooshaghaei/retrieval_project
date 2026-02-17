@@ -11,6 +11,19 @@ from rank_bm25 import BM25Plus
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
+import re
+
+# tokenizing for bm25
+_token_re = re.compile(r"[a-z0-9]+")  
+
+def tokenize(text: str):
+    if text is None:
+        return []
+    text = str(text).lower()
+    # "bla-bla" match "bla bla"
+    text = re.sub(r"[-_/]", " ", text)
+    return _token_re.findall(text)
+
 def embed_retrieve(docs_df, queries_df, top_k=10, batch_size=128, model_name="all-MiniLM-L6-v2"):
     # Step 1: Load a sentence-embedding model (bi-encoder).
     # This model maps texts into a shared vector space.
@@ -44,16 +57,10 @@ def embed_retrieve(docs_df, queries_df, top_k=10, batch_size=128, model_name="al
     # Step 5: Select top_k documents per query.
     # argpartition is faster than full sort for large matrices.
     top_k = min(top_k, len(docs_df))  # safety
-    # topk_idx = np.argpartition(-scores, top_k, axis=1)[:, :top_k]
 
     # argpartition kth is 0-indexed -> use top_k - 1
     topk_idx = np.argpartition(-scores, top_k - 1, axis=1)[:, :top_k]
 
-    # # Step 6: Sort those top_k docs by score (descending).
-    # topk_sorted = topk_idx[
-    #     np.arange(scores.shape[0])[:, None],
-    #     np.argsort(-scores[np.arange(scores.shape[0])[:, None], topk_idx]),
-    # ]
 
     # Step 6: Sort those top_k docs by score (descending).
     topk_sorted = topk_idx[
@@ -97,22 +104,19 @@ def run_tfidf_search(docs_df, query_df, top_k=10):
 def run_bm25_search(docs_df, query_df, top_k=10):
     print(f"indexing bm25 on {len(docs_df)} docs...")
 
-    # itt needs lists of words
-    tokenized_corpus = [doc.split() for doc in docs_df["content"]]
+    tokenized_corpus = [tokenize(doc) for doc in docs_df["content"]]
     bm25 = BM25Plus(tokenized_corpus)
 
     results = []
     print("Retrieving...")
 
-    for index, row in query_df.iterrows():
+    for _, row in query_df.iterrows():
         query_id = row["id"]
-        tokenized_query = row["content"].split()
+        tokenized_query = tokenize(row["content"])
 
-        # Get scores
         doc_scores = bm25.get_scores(tokenized_query)
         top_indices = np.argsort(doc_scores)[-top_k:][::-1]
         relevant_docs = docs_df.iloc[top_indices]["id"].tolist()
-
         results.append({"query_id": query_id, "relevant_docs": relevant_docs})
 
     return results
