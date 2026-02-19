@@ -1,122 +1,130 @@
-# TF-IDF, BM25, embeded_retrieve logic goes here
+"""Retrieval models: TF-IDF, BM25, and dense semantic search."""
 
-import pandas as pd
-
-# BM25 and TF-IDF
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from rank_bm25 import BM25Plus
-
-# SentenceTransformer (Deep Learning)
-from sentence_transformers import SentenceTransformer
-import numpy as np
+from __future__ import annotations
 
 import re
+from typing import List
 
-# tokenizing for bm25
-_token_re = re.compile(r"[a-z0-9]+")  
+import numpy as np
+import pandas as pd
+from rank_bm25 import BM25Plus
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-def tokenize(text: str):
-    if text is None:
-        return []
-    text = str(text).lower()
-    # "bla-bla" match "bla bla"
-    text = re.sub(r"[-_/]", " ", text)
-    return _token_re.findall(text)
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
-def embed_retrieve(docs_df, queries_df, top_k=10, batch_size=128, model_name="all-MiniLM-L6-v2"):
-    # Step 1: Load a sentence-embedding model (bi-encoder).
-    # This model maps texts into a shared vector space.
-    print(f"loadiing '{model_name}' (this might take a minute!)...")
+
+def tokenize(text: str) -> List[str]:
+    """Simple tokenizer used by BM25."""
+    # Match notebook and pipeline behavior: lowercase + basic symbol splitting.
+    normalized = str(text or "").lower()
+    normalized = re.sub(r"[-_/]", " ", normalized)
+    return _TOKEN_PATTERN.findall(normalized)
+
+
+def _build_result(query_id: str, ranked_doc_ids: List[str]) -> dict:
+    return {"query_id": str(query_id), "relevant_docs": [str(doc_id) for doc_id in ranked_doc_ids]}
+
+
+def run_tfidf_search(docs_df: pd.DataFrame, query_df: pd.DataFrame, top_k: int = 10) -> List[dict]:
+    """Retrieve documents with cosine similarity on TF-IDF vectors."""
+    top_k = min(top_k, len(docs_df))
+
+    # Use a slightly richer lexical representation (unigrams + bigrams).
+    vectorizer = TfidfVectorizer(lowercase=True, ngram_range=(1, 2), min_df=2)
+    try:
+        doc_vectors = vectorizer.fit_transform(docs_df["content"])
+    except ValueError as error:
+        # Small datasets may lose all terms with min_df=2. Fall back to min_df=1.
+        if "After pruning, no terms remain" not in str(error):
+            raise
+        vectorizer = TfidfVectorizer(lowercase=True, ngram_range=(1, 2), min_df=1)
+        doc_vectors = vectorizer.fit_transform(docs_df["content"])
+
+    query_vectors = vectorizer.transform(query_df["content"])
+
+    # Similarity matrix shape: [num_queries, num_docs].
+    similarity_matrix = cosine_similarity(query_vectors, doc_vectors)
+    doc_ids = docs_df["id"].astype(str).to_numpy()
+
+    results: List[dict] = []
+    for row_idx, scores in enumerate(similarity_matrix):
+        # Highest scores are the most relevant docs for this query.
+        top_indices = np.argsort(scores)[-top_k:][::-1]
+        ranked_doc_ids = doc_ids[top_indices].tolist()
+        results.append(_build_result(query_df.iloc[row_idx]["id"], ranked_doc_ids))
+
+    return results
+
+
+def run_bm25_search(docs_df: pd.DataFrame, query_df: pd.DataFrame, top_k: int = 10) -> List[dict]:
+    """Retrieve documents with BM25+ lexical ranking."""
+    top_k = min(top_k, len(docs_df))
+
+    # BM25 works on tokenized corpus rather than raw strings.
+    tokenized_corpus = [tokenize(text) for text in docs_df["content"]]
+    bm25 = BM25Plus(tokenized_corpus)
+
+    doc_ids = docs_df["id"].astype(str).to_numpy()
+    results: List[dict] = []
+
+    for _, row in query_df.iterrows():
+        query_tokens = tokenize(row["content"])
+        scores = bm25.get_scores(query_tokens)
+        # Keep only top-k indices to avoid sorting all docs fully in final output.
+        top_indices = np.argsort(scores)[-top_k:][::-1]
+        ranked_doc_ids = doc_ids[top_indices].tolist()
+        results.append(_build_result(row["id"], ranked_doc_ids))
+
+    return results
+
+
+def run_dense_search(
+    docs_df: pd.DataFrame,
+    query_df: pd.DataFrame,
+    top_k: int = 10,
+    batch_size: int = 128,
+    model_name: str = "all-MiniLM-L6-v2",
+) -> List[dict]:
+    """Retrieve documents with sentence-transformer embeddings.
+
+    Note: this is slower and memory-intensive on large corpora.
+    """
+    from sentence_transformers import SentenceTransformer
+
+    top_k = min(top_k, len(docs_df))
+
+    # Bi-encoder maps texts to dense vectors in a shared semantic space.
     model = SentenceTransformer(model_name)
-
-    # Step 2: Encode documents into dense vectors -> This turns text into a matrix of numbers
-    # normalize_embeddings=True makes dot product equal cosine similarity.
-    print(f"encoding {len(docs_df)} documents...")
-    doc_emb = model.encode(
+    doc_embeddings = model.encode(
         docs_df["content"].tolist(),
         batch_size=batch_size,
         show_progress_bar=True,
         normalize_embeddings=True,
     )
-
-    # Step 3: Encode queries into dense vectors in the same space.
-    print("encoding queries...")
-    qry_emb = model.encode(
-        queries_df["content"].tolist(),
+    query_embeddings = model.encode(
+        query_df["content"].tolist(),
         batch_size=batch_size,
         show_progress_bar=True,
         normalize_embeddings=True,
     )
 
-    # Step 4: Compute similarity between every query and every document.
-    print("calculating Similarity...")
-    # With normalized vectors, dot product == cosine similarity
-    scores = qry_emb @ doc_emb.T
-
-    # Step 5: Select top_k documents per query.
-    # argpartition is faster than full sort for large matrices.
-    top_k = min(top_k, len(docs_df))  # safety
-
-    # argpartition kth is 0-indexed -> use top_k - 1
+    # With normalized embeddings, dot product == cosine similarity.
+    scores = query_embeddings @ doc_embeddings.T
+    # Argpartition gets top-k candidates faster than full sort on each row.
     topk_idx = np.argpartition(-scores, top_k - 1, axis=1)[:, :top_k]
 
-
-    # Step 6: Sort those top_k docs by score (descending).
-    topk_sorted = topk_idx[
+    # Sort only the top-k candidates by score for stable ranked output.
+    sorted_topk = topk_idx[
         np.arange(scores.shape[0])[:, None],
-        np.argsort(-scores[np.arange(scores.shape[0])[:, None], topk_idx])
+        np.argsort(-scores[np.arange(scores.shape[0])[:, None], topk_idx]),
     ]
-    # Step 7: Convert indices -> doc IDs and output dicts
-    results = []
-    for i, doc_indices in enumerate(topk_sorted):
-        query_id = queries_df.iloc[i]["id"]
-        relevant_docs = docs_df.iloc[doc_indices]["id"].tolist()
-        results.append({"query_id": query_id, "relevant_docs": relevant_docs})
 
-    return results
+    doc_ids = docs_df["id"].astype(str).to_numpy()
+    results: List[dict] = []
 
-
-def run_tfidf_search(docs_df, query_df, top_k=10):
-
-    print(f"training tf-idf on {len(docs_df)} docs.....")
-
-    # it needs raw strings
-    # use the 'content' column created in preprocessing
-    vectorizer = TfidfVectorizer(lowercase=True)
-    doc_vectors = vectorizer.fit_transform(docs_df["content"])
-    query_vectors = vectorizer.transform(query_df["content"])
-
-    print("now calculating Cosine Similarity..")
-    similarity_matrix = cosine_similarity(query_vectors, doc_vectors)
-
-    results = []
-    # Convert matrix to list of results
-    for i, row in enumerate(similarity_matrix):
-        query_id = query_df.iloc[i]["id"]
-        top_indices = row.argsort()[-top_k:][::-1]
-        relevant_docs = docs_df.iloc[top_indices]["id"].tolist()
-        results.append({"query_id": query_id, "relevant_docs": relevant_docs})
-
-    return results
-
-
-def run_bm25_search(docs_df, query_df, top_k=10):
-    print(f"indexing bm25 on {len(docs_df)} docs...")
-
-    tokenized_corpus = [tokenize(doc) for doc in docs_df["content"]]
-    bm25 = BM25Plus(tokenized_corpus)
-
-    results = []
-    print("Retrieving...")
-
-    for _, row in query_df.iterrows():
-        query_id = row["id"]
-        tokenized_query = tokenize(row["content"])
-
-        doc_scores = bm25.get_scores(tokenized_query)
-        top_indices = np.argsort(doc_scores)[-top_k:][::-1]
-        relevant_docs = docs_df.iloc[top_indices]["id"].tolist()
-        results.append({"query_id": query_id, "relevant_docs": relevant_docs})
+    for query_idx, doc_indices in enumerate(sorted_topk):
+        ranked_doc_ids = doc_ids[doc_indices].tolist()
+        results.append(_build_result(query_df.iloc[query_idx]["id"], ranked_doc_ids))
 
     return results
