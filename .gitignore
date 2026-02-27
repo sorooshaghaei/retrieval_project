@@ -29,9 +29,11 @@ pip-wheel-metadata/
 # Virtual environments
 #################################
 .venv/
+.venv
 venv/
 env/
 ENV/
+src/.venv
 
 #################################
 # Jupyter
@@ -116,3 +118,13 @@ report/**/*.toc
 report/**/*.synctex.gz
 report/**/*.fdb_latexmk
 report/**/*.fls
+
+#################################
+# Keep notebooks and reports
+#################################
+!notebooks/
+!notebooks/**/*.ipynb
+!report/
+!report/**/*.ipynb
+!report/**/*.md
+!report/**/*.pdf

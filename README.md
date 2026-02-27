@@ -1,98 +1,86 @@
-# Retrieval Engine Competition — Data Science Project (M1 VMI)
+# Retrieval Engine Competition Project
 
-This repository contains our **Information Retrieval Engine** project for the data science course in **Master 1 – Vision & Machine Intelligence (VMI)** second semester Paris Cité. The project is based on the Kaggle competition **“Retrieval Engine Competition”**.
+Information retrieval project for the Kaggle competition:
+https://www.kaggle.com/competitions/retrieval-engine-competition
 
-**🔗 Kaggle Competition Link:** [https://www.kaggle.com/competitions/retrieval-engine-competition](https://www.kaggle.com/competitions/retrieval-engine-competition)
-
----
-
-## Authors
-
-| Name | Role / Focus |
-| :--- | :--- |
-| **Maksym DOLHOV** | Team Member |
-| **Mehdi AGHAEI** | Team Member |
-| **Nguyễn Hồ Bảo KHÁNH** | Team Member |
-| **Nima DAVARI** | Team Member |
-
----
-
-## Project Goal
-
-The objective is to build an Information Retrieval (IR) system.
-**Given:**
-1.  A corpus of **Documents**.
-2.  A set of **Queries**.
-3.  **Relevance Judgments** (Ground Truth or Vérité Térrain).
-
-**Task:**
-Build a system that, for every query, **retrieves and ranks** the most relevant documents from the corpus.
-
----
+## Team
+- Maksym DOLHOV
+- Mehdi AGHAEI
+- Nguyen Ho Bao KHANH
+- Nima DAVARI
 
 ## Repository Structure
-
-
 ```text
-.
-├── data/                     # GIT IGNORED (Local storage only)
-│   ├── docs.json
-│   ├── queries_train.json
-│   ├── queries_test.json
-│   └── qgts_train.json
-├── notebooks/                #Jupyter notebooks for wxplains & experiments
-│   ├── basic_analysis.ipynb
-├── src/    
-│   ├── __init__.py           # python package
-│   ├── preprocess.py
-│   ├── utils.py
-│   ├── models.py             # logic goes here
-│   └── evaluation.py         # Calculates Precision/Recall         
-├── outputs/                  # GIT IGNORED (Logs, metrics, submission files)
-│   ├── runs/
-│   ├── submission.csv
-├── report/                   # Slides, notes, and final report assets
-├── .gitignore                
-├── PIPELINE.md               #explanation of our workflow
-├── requirements.txt          #dependencies
-├── main.py                   #Runs the whole machine  
-└── README.md  
+retrieval_project/
+├── data/                      # local competition data (ignored in git)
+├── notebooks/
+│   ├── kaggle/
+│   │   └── kaggle_submission.ipynb
+│   ├── phase1/
+│   │   └── phase1_retrieval_basics.ipynb
+│   ├── explain/
+│   │   ├── retrieval_explained.ipynb
+│   │   └── model_implementations.ipynb
+│   ├── reports/
+│   │   └── submission_report.ipynb
+│   ├── analysis/
+│   │   └── basic_analysis.ipynb
+│   └── assets/
+│       └── no_text_problem.png
+├── outputs/                   # generated submissions/metrics (ignored in git)
+├── src/
+│   ├── pipeline.py            # end-to-end orchestration
+│   ├── preprocess.py          # content construction + normalization
+│   ├── models.py              # TF-IDF / BM25 / Dense retrieval
+│   ├── evaluation.py          # Precision@K / Recall@K / MRR@K / MAP@K
+│   └── utils.py               # data loading + Kaggle CSV writer
+├── main.py                    # thin CLI entrypoint (calls src.pipeline)
+├── PIPELINE.md                # workflow details
+├── requirements.txt
+└── README.md
 ```
 
-## Setup & Usage
-1. Environment Setup
-Clone the repository and create a virtual environment:
-```Bash
-# Create virtual env
+## Installation
+```bash
 python3 -m venv .venv
-```
-
-# Activate (Linux/Mac)
-```bash
 source .venv/bin/activate
-```
-# Activate (Windows)
-```bash
-.venv\Scripts\activate
-```
-
-2. Install Dependencies
-```Bash
 pip install -r requirements.txt
 ```
 
-# Or manually:
+## Required Data Files
+Put these in `data/`:
+- `docs.json`
+- `queries_train.json`
+- `queries_test.json`
+- `qgts_train.json`
+- `submission.csv`
+
+## Run Full Pipeline
 ```bash
-pip install numpy pandas tqdm scikit-learn rank_bm25 nltk sentence-transformers torch
+python3 main.py
 ```
 
-3. Data Ingestion
-Download the dataset from Kaggle and place the JSON files into data.
+This command:
+1. loads and preprocesses data,
+2. evaluates TF-IDF and BM25 on training queries,
+3. generates test-set submissions,
+4. writes `outputs/solutions_SeaFour.csv` for Kaggle upload.
 
-4. Running the Pipeline
+Select final upload model in `src/pipeline.py` with `FINAL_MODEL` (`"bm25"`, `"tfidf"`, or `"dense"`).
+To include dense model comparison during training evaluation, set `RUN_DENSE_EVAL=True`.
 
-Evaluation
-We evaluate our models using the provided training relevance judgments (qrels). Key metrics include:
- - Precision@K: Proportion of relevant docs in the top $K$ results.
- - MAP (Mean Average Precision): Measures the quality of ranking across all queries. 
- 
+## Notebooks
+- `notebooks/kaggle/kaggle_submission.ipynb`:
+  Minimal, reproducible notebook for Kaggle submission generation only.
+- `notebooks/explain/retrieval_explained.ipynb`:
+  Explanation notebook describing data flow, ranking logic, and why models behave differently.
+- `notebooks/explain/model_implementations.ipynb`:
+  Model mechanics from scratch so retrieval methods are transparent and not black boxes.
+- `notebooks/phase1/phase1_retrieval_basics.ipynb`:
+  Phase-1 benchmark notebook comparing TF-IDF, BM25+, and embedding retrieval with standard IR metrics.
+- `notebooks/reports/submission_report.ipynb`:
+  Validation report notebook that checks `solutions_SeaFour.csv` against `data/submission.csv`.
+
+## Submission Guidance
+- Moodle: submit full codebase + report PDF.
+- Kaggle: submit only `notebooks/kaggle/kaggle_submission.ipynb` (or an equivalent minimal retrieval-to-CSV notebook).
