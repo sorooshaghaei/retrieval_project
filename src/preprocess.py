@@ -1,44 +1,51 @@
-"""Search engines don't look at "Title" and "Text" separately usually. 
-They look at one big blob of text. We need to combine: Title + Text + Tags = Content. 
-Also, we should lowercase everything"""
+"""Text preprocessing utilities used by retrieval models."""
+
+from __future__ import annotations
+
+from typing import List
 
 import pandas as pd
 
 
-def clean_text(text):
-    if pd.isna(text) or text == "":
+def _value_to_text(value: object) -> str:
+    """Convert a single cell value to normalized text.
+
+    - ``NaN`` and ``None`` become an empty string.
+    - lists/tuples are joined with spaces.
+    - other values are cast to strings.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
-    return str(text).lower()
+
+    if isinstance(value, (list, tuple)):
+        return " ".join(str(item) for item in value)
+
+    if pd.isna(value):
+        return ""
+
+    return str(value)
 
 
-def safe_value_to_string(val):
-    if isinstance(val, list):
-        return " ".join(str(v) for v in val)
-    return str(val)
+def create_content_column(df: pd.DataFrame, columns_to_merge: List[str]) -> pd.DataFrame:
+    """Create normalized ``content`` and string ``id`` columns.
 
+    Missing columns from ``columns_to_merge`` are created as empty strings.
+    """
+    processed = df.copy()
 
-def create_content_column(df, columns_to_merge):
-    print("creating 'content' column...")
-    df_clean = df.copy()
+    for column in columns_to_merge:
+        if column not in processed.columns:
+            # Keep one shared preprocessing path for docs and queries.
+            processed[column] = ""
 
-    # 1. fill up empty values to avoid crashes -> if col exist fill NaN
-    for col in columns_to_merge:
-        if col in df_clean.columns:
-            df_clean[col] = df_clean[col].fillna("")
-        else:
-            # if a column (like tags) is missing in queries, create it as empty
-            df_clean[col] = ""
+    merged_values = []
+    for _, row in processed[columns_to_merge].iterrows():
+        parts = [_value_to_text(row[column]) for column in columns_to_merge]
+        # Lowercasing here keeps lexical models (TF-IDF/BM25) consistent.
+        merged_values.append(" ".join(part for part in parts if part).strip().lower())
 
-    # 2. Combine columns safely (Handling lists like 'tags')
-    contents = []
+    processed["content"] = merged_values
+    if "id" in processed.columns:
+        processed["id"] = processed["id"].astype(str)
 
-    for i in range(len(df_clean)):
-        parts = []
-        for col in columns_to_merge:
-            parts.append(safe_value_to_string(df_clean.at[i, col]))
-        contents.append(" ".join(parts))
-    df_clean["content"] = contents
-
-    df_clean["content"] = [clean_text(text) for text in df_clean["content"]]
-
-    return df_clean
+    return processed
