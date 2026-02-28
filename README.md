@@ -66,8 +66,8 @@ This command:
 3. generates test-set submissions,
 4. writes `outputs/solutions_SeaFour.csv` for Kaggle upload.
 
-Select final upload model in `src/pipeline.py` with `FINAL_MODEL` (`"bm25"`, `"tfidf"`, or `"dense"`).
-To include dense model comparison during training evaluation, set `RUN_DENSE_EVAL=True`.
+Select final upload model in `src/pipeline.py` with `FINAL_MODEL` (`"bm25"`, `"tfidf"`, or `"embedding_hybrid"`).
+To include hybrid embedding comparison during training evaluation, set `RUN_EMBEDDING_HYBRID_EVAL=True`.
 
 ## Notebooks
 - `notebooks/kaggle/kaggle_submission.ipynb`:
