@@ -1,7 +1,12 @@
 """Retrieval project source package."""
 
 from .evaluation import evaluate_retrieval
-from .models import run_bm25_search, run_dense_search, run_tfidf_search
+from .models import (
+    run_bm25_search,
+    run_dense_search,
+    run_embedding_hybrid_search,
+    run_tfidf_search,
+)
 from .pipeline import run_pipeline
 from .preprocess import create_content_column
 from .utils import (
@@ -15,6 +20,7 @@ __all__ = [
     "evaluate_retrieval",
     "run_bm25_search",
     "run_dense_search",
+    "run_embedding_hybrid_search",
     "run_tfidf_search",
     "run_pipeline",
     "create_content_column",
