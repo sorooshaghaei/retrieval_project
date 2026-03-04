@@ -7,7 +7,6 @@ https://www.kaggle.com/competitions/retrieval-engine-competition
 - Maksym DOLHOV
 - Mehdi AGHAEI
 - Nguyen Ho Bao KHANH
-- Nima DAVARI
 
 ## Repository Structure
 ```text
