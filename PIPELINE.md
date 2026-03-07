@@ -19,7 +19,6 @@ Each field is lowercased and normalized into plain strings so all retrieval mode
 Implemented in `src/models.py`:
 - `run_tfidf_search`: TF-IDF vectors + cosine similarity
 - `run_bm25_search`: BM25+ lexical ranking
-- `run_embedding_hybrid_search`: TF-IDF + BM25 candidate generation with sentence-transformer reranking
 
 All models return a standard format:
 ```python
@@ -34,8 +33,7 @@ Training queries are evaluated using `qgts_train.json` with:
 - MAP@K
 
 Implementation is in `src/evaluation.py`.
-`src/pipeline.py` (triggered by `main.py`) evaluates TF-IDF and BM25 by default, and can include hybrid embedding evaluation
-by setting `RUN_EMBEDDING_HYBRID_EVAL=True`.
+`src/pipeline.py` (triggered by `main.py`) evaluates TF-IDF and BM25 by default.
 
 ## 5. Submission Generation
 For test queries, top-100 documents are produced, then exported to Kaggle format using `write_kaggle_submission` in `src/utils.py`.

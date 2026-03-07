@@ -1,4 +1,4 @@
-"""Retrieval models: TF-IDF, BM25, dense, and hybrid embedding search."""
+"""Retrieval models: TF-IDF, BM25, and dense retrieval."""
 
 from __future__ import annotations
 
@@ -131,79 +131,5 @@ def run_dense_search(
     for query_idx, doc_indices in enumerate(sorted_topk):
         ranked_doc_ids = doc_ids[doc_indices].tolist()
         results.append(_build_result(query_df.iloc[query_idx]["id"], ranked_doc_ids))
-
-    return results
-
-
-def run_embedding_hybrid_search(
-    docs_df: pd.DataFrame,
-    query_df: pd.DataFrame,
-    top_k: int = 10,
-    candidate_k: int = 200,
-    batch_size: int = 128,
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-) -> List[dict]:
-    """Retrieve with lexical candidate generation and embedding-based reranking.
-
-    This mirrors the Kaggle notebook flow:
-    1. Generate high-recall candidates with TF-IDF and BM25+.
-    2. Encode the corpus and queries with a sentence-transformer.
-    3. Rerank the merged candidate pool semantically.
-    """
-    top_k = min(top_k, len(docs_df))
-    candidate_k = min(max(candidate_k, top_k), len(docs_df))
-
-    tfidf_results = run_tfidf_search(docs_df, query_df, top_k=candidate_k)
-    bm25_results = run_bm25_search(docs_df, query_df, top_k=candidate_k)
-
-    model = _load_sentence_transformer(model_name)
-    doc_embeddings = model.encode(
-        docs_df["content"].tolist(),
-        batch_size=batch_size,
-        show_progress_bar=True,
-        normalize_embeddings=True,
-    )
-    query_embeddings = model.encode(
-        query_df["content"].tolist(),
-        batch_size=batch_size,
-        show_progress_bar=True,
-        normalize_embeddings=True,
-    )
-
-    doc_ids = docs_df["id"].astype(str).to_numpy()
-    doc_id_to_index = {doc_id: idx for idx, doc_id in enumerate(doc_ids)}
-    query_ids = query_df["id"].astype(str).tolist()
-
-    results: List[dict] = []
-    for query_idx, query_embedding in enumerate(query_embeddings):
-        candidate_doc_ids: List[str] = []
-        seen_doc_ids = set()
-
-        for ranked_doc_ids in (
-            tfidf_results[query_idx]["relevant_docs"],
-            bm25_results[query_idx]["relevant_docs"],
-        ):
-            for doc_id in ranked_doc_ids:
-                doc_id = str(doc_id)
-                if doc_id in seen_doc_ids:
-                    continue
-                candidate_doc_ids.append(doc_id)
-                seen_doc_ids.add(doc_id)
-
-        candidate_indices = np.array(
-            [doc_id_to_index[doc_id] for doc_id in candidate_doc_ids],
-            dtype=int,
-        )
-        candidate_scores = doc_embeddings[candidate_indices] @ query_embedding
-        rerank_count = min(top_k, len(candidate_doc_ids))
-        reranked_idx = np.argsort(candidate_scores)[-rerank_count:][::-1]
-        ranked_doc_ids = [candidate_doc_ids[idx] for idx in reranked_idx]
-
-        results.append(
-            {
-                "query_id": query_ids[query_idx],
-                "relevant_docs": ranked_doc_ids,
-            }
-        )
 
     return results
