@@ -1,5 +1,6 @@
 """Retrieval project source package."""
 
+from .config import DEFAULT_CONFIG, PipelineConfig
 from .evaluation import evaluate_retrieval
 from .models import (
     run_bm25_search,
@@ -17,6 +18,8 @@ from .utils import (
 )
 
 __all__ = [
+    "DEFAULT_CONFIG",
+    "PipelineConfig",
     "evaluate_retrieval",
     "run_bm25_search",
     "run_dense_search",
