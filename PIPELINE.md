@@ -1,62 +1,42 @@
 # Retrieval Project Pipeline
 
-## 1. Data Inputs
-The pipeline expects the following files inside `data/`:
+## Inputs
+The pipeline expects these files in `data/`:
 - `docs.json`
 - `queries_train.json`
 - `queries_test.json`
 - `qgts_train.json`
-- `submission.csv` (Kaggle template)
+- `submission.csv`
 
-## 2. Preprocessing
-We create a unified `content` field for each row:
-- Documents: `title + text + tags`
-- Queries: `title + text`
+## Shared Preprocessing
+Every model receives one normalized text field:
+- documents: `title + text + tags`
+- queries: `title + text`
 
-Each field is lowercased and normalized into plain strings so all retrieval models consume the same input.
+The transformation happens in [src/preprocess.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/preprocess.py).
 
-## 3. Retrieval Models
-Implemented in `src/models.py`:
-- `run_tfidf_search`: TF-IDF vectors + cosine similarity
-- `run_bm25_search`: BM25+ lexical ranking
-- `run_embedding_hybrid_search`: TF-IDF + BM25 candidate generation with sentence-transformer reranking
+## Runtime Configuration
+Pipeline settings are centralized in [src/config.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/config.py).
 
-All models return a standard format:
-```python
-{"query_id": "...", "relevant_docs": ["doc1", "doc2", ...]}
-```
+Important options:
+- `eval_models`
+- `submission_models`
+- `final_model`
+- `run_embedding_hybrid_eval`
+- `embedding_hybrid_eval_query_limit`
 
-## 4. Evaluation
-Training queries are evaluated using `qgts_train.json` with:
-- Precision@K
-- Recall@K
-- MRR@K
-- MAP@K
+## Execution Flow
+1. Load raw competition data with [src/utils.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/utils.py).
+2. Build the `content` column with [src/preprocess.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/preprocess.py).
+3. Evaluate train queries with [src/evaluation.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/evaluation.py).
+4. Generate Kaggle CSVs with [src/models.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/models.py) and [src/utils.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/utils.py).
+5. Validate the final file against the sample submission template.
 
-Implementation is in `src/evaluation.py`.
-`src/pipeline.py` (triggered by `main.py`) evaluates TF-IDF and BM25 by default, and can include hybrid embedding evaluation
-by setting `RUN_EMBEDDING_HYBRID_EVAL=True`.
-
-## 5. Submission Generation
-For test queries, top-100 documents are produced, then exported to Kaggle format using `write_kaggle_submission` in `src/utils.py`.
-
-Outputs are written to `outputs/`:
-- `solutions_SeaFour_bm25.csv`
-- `solutions_SeaFour_tfidf.csv`
-- `solutions_SeaFour.csv` (final file to upload)
-
-`solutions_SeaFour.csv` is generated from the model selected in `FINAL_MODEL` inside `src/pipeline.py`.
-
-After writing the final file, the pipeline validates it against `data/submission.csv`
-using `validate_submission_against_template`.
-
-## 6. Run Command
+## Main Command
 ```bash
 python3 main.py
 ```
 
-## 7. Submission Strategy
-- Moodle submission: full project code + report PDF.
-- Kaggle submission: use only `notebooks/kaggle/kaggle_submission.ipynb` to reproduce leaderboard CSV.
-- Validation report: `notebooks/reports/submission_report.ipynb`.
-- Phase-1 model comparison: `notebooks/phase1/phase1_retrieval_basics.ipynb`.
+## Learning Material
+- Workbook: [notebooks/retrieval_project_workbook.ipynb](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/notebooks/retrieval_project_workbook.ipynb)
+- Report: [report/retrieval_project_report.pdf](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/report/retrieval_project_report.pdf)

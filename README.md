@@ -8,33 +8,25 @@ https://www.kaggle.com/competitions/retrieval-engine-competition
 - Mehdi AGHAEI
 - Nguyen Ho Bao KHANH
 
-## Repository Structure
+## Clean Structure
 ```text
 retrieval_project/
-├── data/                      # local competition data (ignored in git)
+├── data/                                 # local competition data (ignored in git)
 ├── notebooks/
-│   ├── kaggle/
-│   │   └── kaggle_submission.ipynb
-│   ├── phase1/
-│   │   └── phase1_retrieval_basics.ipynb
-│   ├── explain/
-│   │   ├── retrieval_explained.ipynb
-│   │   └── model_implementations.ipynb
-│   ├── reports/
-│   │   └── submission_report.ipynb
-│   ├── analysis/
-│   │   └── basic_analysis.ipynb
-│   └── assets/
-│       └── no_text_problem.png
-├── outputs/                   # generated submissions/metrics (ignored in git)
+│   └── retrieval_project_workbook.ipynb  # one visual, teaching-first notebook
+├── outputs/                              # generated submissions (ignored in git)
+├── report/
+│   ├── retrieval_project_report.tex      # A4 LaTeX source
+│   └── retrieval_project_report.pdf      # compiled report
 ├── src/
-│   ├── pipeline.py            # end-to-end orchestration
-│   ├── preprocess.py          # content construction + normalization
-│   ├── models.py              # TF-IDF / BM25 / Dense retrieval
-│   ├── evaluation.py          # Precision@K / Recall@K / MRR@K / MAP@K
-│   └── utils.py               # data loading + Kaggle CSV writer
-├── main.py                    # thin CLI entrypoint (calls src.pipeline)
-├── PIPELINE.md                # workflow details
+│   ├── config.py                         # runtime configuration
+│   ├── pipeline.py                       # orchestration
+│   ├── preprocess.py                     # shared text normalization
+│   ├── models.py                         # TF-IDF, BM25, dense, hybrid
+│   ├── evaluation.py                     # Precision@K, Recall@K, MRR, MAP
+│   └── utils.py                          # data loading + CSV validation/writing
+├── main.py                               # thin CLI entrypoint
+├── PIPELINE.md                           # short workflow reference
 ├── requirements.txt
 └── README.md
 ```
@@ -47,39 +39,43 @@ pip install -r requirements.txt
 ```
 
 ## Required Data Files
-Put these in `data/`:
+Put these files in `data/`:
 - `docs.json`
 - `queries_train.json`
 - `queries_test.json`
 - `qgts_train.json`
 - `submission.csv`
 
-## Run Full Pipeline
+## Run The Project
 ```bash
 python3 main.py
 ```
 
-This command:
-1. loads and preprocesses data,
-2. evaluates TF-IDF and BM25 on training queries,
-3. generates test-set submissions,
-4. writes `outputs/solutions_SeaFour.csv` for Kaggle upload.
+The pipeline:
+1. loads the competition files,
+2. builds one normalized `content` field for docs and queries,
+3. evaluates the configured retrieval models on train queries,
+4. writes Kaggle-ready CSV files to `outputs/`,
+5. validates the final submission against the sample template.
 
-Select final upload model in `src/pipeline.py` with `FINAL_MODEL` (`"bm25"`, `"tfidf"`, or `"embedding_hybrid"`).
-To include hybrid embedding comparison during training evaluation, set `RUN_EMBEDDING_HYBRID_EVAL=True`.
+Runtime settings now live in [src/config.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/config.py). The main knobs are:
+- `final_model`
+- `eval_models`
+- `submission_models`
+- `run_embedding_hybrid_eval`
+- `embedding_hybrid_eval_query_limit`
 
-## Notebooks
-- `notebooks/kaggle/kaggle_submission.ipynb`:
-  Minimal, reproducible notebook for Kaggle submission generation only.
-- `notebooks/explain/retrieval_explained.ipynb`:
-  Explanation notebook describing data flow, ranking logic, and why models behave differently.
-- `notebooks/explain/model_implementations.ipynb`:
-  Model mechanics from scratch so retrieval methods are transparent and not black boxes.
-- `notebooks/phase1/phase1_retrieval_basics.ipynb`:
-  Phase-1 benchmark notebook comparing TF-IDF, BM25+, and embedding retrieval with standard IR metrics.
-- `notebooks/reports/submission_report.ipynb`:
-  Validation report notebook that checks `solutions_SeaFour.csv` against `data/submission.csv`.
+## Learning Artifacts
+- [notebooks/retrieval_project_workbook.ipynb](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/notebooks/retrieval_project_workbook.ipynb): one consolidated notebook with data exploration, plots, model intuition, guided exercises, and code walk-throughs.
+- [report/retrieval_project_report.tex](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/report/retrieval_project_report.tex): A4 report source.
+- [report/retrieval_project_report.pdf](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/report/retrieval_project_report.pdf): compiled report with appendix and study material.
 
-## Submission Guidance
-- Moodle: submit full codebase + report PDF.
-- Kaggle: submit only `notebooks/kaggle/kaggle_submission.ipynb` (or an equivalent minimal retrieval-to-CSV notebook).
+## Build The PDF
+```bash
+cd report
+xelatex -interaction=nonstopmode retrieval_project_report.tex
+```
+
+## Notes
+- The workbook is designed for learning, so it includes visual explanations, active-learning prompts, and code commentary.
+- The codebase keeps the executable pipeline in `src/` and the teaching material in `notebooks/` and `report/`, so experimentation and submission logic stay separated.

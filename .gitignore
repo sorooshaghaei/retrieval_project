@@ -40,6 +40,7 @@ src/.venv
 #################################
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
+notebooks/**/*.csv
 
 #################################
 # Tests / coverage
@@ -118,6 +119,7 @@ report/**/*.toc
 report/**/*.synctex.gz
 report/**/*.fdb_latexmk
 report/**/*.fls
+report/build/
 
 #################################
 # Keep notebooks and reports
