@@ -1,42 +1,59 @@
 # Retrieval Project Pipeline
 
 ## Inputs
+
 The pipeline expects these files in `data/`:
-- `docs.json`
-- `queries_train.json`
-- `queries_test.json`
-- `qgts_train.json`
-- `submission.csv`
+
+| File | Description |
+|------|-------------|
+| `docs.json` | 216,041 documents (id, text, title, tags, category) |
+| `queries_train.json` | 327 training queries |
+| `queries_test.json` | 141 test queries |
+| `qgts_train.json` | Training ground-truth relevance judgements |
+| `submission.csv` | Sample submission template |
 
 ## Shared Preprocessing
-Every model receives one normalized text field:
-- documents: `title + text + tags`
-- queries: `title + text`
 
-The transformation happens in [src/preprocess.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/preprocess.py).
+Every model receives one normalised text field (`content`):
+- **Documents:** `title + text + tags` (tags are space-joined)
+- **Queries:** `title + text`
 
-## Runtime Configuration
-Pipeline settings are centralized in [src/config.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/config.py).
+All text is lowercased. Missing values, lists, and mixed types are handled by `value_to_text()`.
 
-Important options:
-- `eval_models`
-- `submission_models`
-- `final_model`
-- `run_embedding_hybrid_eval`
-- `embedding_hybrid_eval_query_limit`
+## Retrieval Methods
+
+| Method | Type | Description |
+|--------|------|-------------|
+| TF-IDF | Sparse lexical | Unigram+bigram TfidfVectorizer, cosine similarity |
+| BM25+ | Sparse lexical | Tokenised corpus with `rank-bm25`, length normalisation |
+| Embedding | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`), dot product |
+| Hybrid | Sparse + Dense | BM25+ retrieves top-500 candidates → embedding re-ranking with score fusion |
 
 ## Execution Flow
-1. Load raw competition data with [src/utils.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/utils.py).
-2. Build the `content` column with [src/preprocess.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/preprocess.py).
-3. Evaluate train queries with [src/evaluation.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/evaluation.py).
-4. Generate Kaggle CSVs with [src/models.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/models.py) and [src/utils.py](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/src/utils.py).
-5. Validate the final file against the sample submission template.
 
-## Main Command
-```bash
-python3 main.py
-```
+1. **Environment setup** — auto-detect Kaggle or local `data/` directory.
+2. **Preprocessing** — build shared `content` column for docs and queries.
+3. **Evaluation** — run all 4 models on 327 training queries; compute MAP@100 and Recall@100.
+4. **Model selection** — set `FINAL_MODEL` to the best-performing method.
+5. **Test retrieval** — run the selected model on 141 test queries.
+6. **CSV writing** — serialise results in Kaggle format.
+7. **Preview** — display the first rows of the output CSV.
 
-## Learning Material
-- Workbook: [notebooks/retrieval_project_workbook.ipynb](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/notebooks/retrieval_project_workbook.ipynb)
-- Report: [report/retrieval_project_report.pdf](/Users/sorooshaghaei/Desktop/Paris_cite_projects/retrieval_project/report/retrieval_project_report.pdf)
+## How to Run
+
+Open `notebooks/kaggle-submission.ipynb` and run all cells.
+
+## Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `FINAL_MODEL` | `hybrid` | `bm25`, `tfidf`, `embedding`, or `hybrid` |
+| `TOP_K` | `100` | Documents per query |
+| `HYBRID_BM25_CANDIDATES` | `500` | BM25+ candidates before re-ranking |
+| `HYBRID_ALPHA` | `0.35` | Weight for BM25+ in score fusion |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
+
+## Output
+
+- **Submission CSV:** `notebooks/solutions_SeaFour.csv`
+- **Report:** `report/retrieval_project_report.pdf`

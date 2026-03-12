@@ -1,12 +1,15 @@
+% !TeX program = xelatex
+% !TeX root = retrieval_project_report.tex
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=1.8cm]{geometry}
 \usepackage{microtype}
-\usepackage{amsmath}
+\usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
 \usepackage{hyperref}
+\usepackage{listings}
 \usepackage{tikz}
 
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc}
@@ -14,7 +17,12 @@
 \hypersetup{
   colorlinks=true,
   linkcolor=blue!50!black,
-  urlcolor=teal!50!black
+  urlcolor=teal!50!black,
+  pdftitle={Retrieval Engine Competition Project},
+  pdfauthor={Maksym DOLHOV; Mehdi AGHAEI; Nguyen Ho Bao KHANH},
+  pdfsubject={SeaFour project report},
+  pdfcreator={},
+  pdfproducer={}
 }
 
 \setlength{\parindent}{0pt}
@@ -28,6 +36,18 @@
 \definecolor{softrose}{HTML}{F7DBE6}
 \definecolor{softgold}{HTML}{F8F2CF}
 
+\lstdefinestyle{codeblock}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{ink!30},
+  backgroundcolor=\color{softblue!25}
+}
+\lstset{style=codeblock}
+
 \newcommand{\studybox}[2]{%
   \par\medskip
   \noindent\fcolorbox{ink}{white}{%
@@ -38,276 +58,598 @@
 
 \begin{document}
 
+% ─────────────────────────── Title page ──────────────────────────────────────
 \begin{titlepage}
 \centering
 {\Large \textbf{Retrieval Engine Competition Project}}\\[0.6cm]
-{\large Cleaned structure, study workbook, and report}\\[1.2cm]
+{\large Project Report}\\[0.6cm]
+{\large Group: SeaFour}\\[0.8cm]
 
-\studybox{Project Goal}{Build a retrieval pipeline for the Kaggle competition, keep the code runnable, and turn the repository into a better study object by consolidating scattered notebooks into one workbook and one A4 report.}
+\begin{tabular}{c}
+Maksym DOLHOV \\
+Mehdi AGHAEI \\
+Nguyen Ho Bao KHANH \\
+\end{tabular}\\[1.2cm]
+
+\studybox{Project Scope}{%
+This report documents the notebook-based submission workflow for the Kaggle
+retrieval competition. The implementation lives in
+\texttt{notebooks/kaggle-submission.ipynb}, which loads the competition data,
+preprocesses text, runs four retrieval methods (TF-IDF, BM25+, Embedding
+Search, and a Hybrid BM25+\,+\,Embedding re-ranking approach), evaluates
+them on the training set, and writes the final submission CSV with the best
+model.}
 
 \vspace{0.6cm}
 
 \begin{tabular}{>{\bfseries}p{0.28\linewidth} p{0.58\linewidth}}
-Project & Retrieval engine competition pipeline \\
-Main code & \texttt{src/} + \texttt{main.py} \\
-Workbook & \texttt{notebooks/retrieval\_project\_workbook.ipynb} \\
-Report & \texttt{report/retrieval\_project\_report.pdf} \\
-Date & March 11, 2026 \\
+Main workflow   & \texttt{notebooks/kaggle-submission.ipynb} \\
+Submission file & \texttt{notebooks/solutions\_SeaFour.csv} \\
+Report          & \texttt{report/retrieval\_project\_report.pdf} \\
+Date            & March 1, 2026 \\
 \end{tabular}
 
 \vfill
-
-{\small This PDF is designed as a memorable study guide: it uses diagrams, shapes, compact summaries, and an appendix with guided practice.}
 \end{titlepage}
 
 \tableofcontents
 \newpage
 
+% ═══════════════════════════════════════════════════════════════════════════════
 \section{Project At A Glance}
+% ═══════════════════════════════════════════════════════════════════════════════
 
-The cleaned repository now separates execution, learning, and reporting:
+The submission workflow is notebook-first.
+One Kaggle notebook contains all the logic needed to reproduce the submission file:
 
 \begin{itemize}
-\item \texttt{src/} contains the runnable retrieval system.
-\item \texttt{notebooks/retrieval\_project\_workbook.ipynb} is the single teaching-first notebook.
-\item \texttt{report/retrieval\_project\_report.pdf} is the formal A4 summary with appendix material.
+\item \texttt{notebooks/kaggle-submission.ipynb} — active implementation.
+\item \texttt{notebooks/solutions\_SeaFour.csv} — generated Kaggle-format output.
+\item \texttt{report/retrieval\_project\_report.pdf} — this report.
 \end{itemize}
 
-\studybox{What Was Removed}{The old notebook collection had overlapping responsibilities: data exploration, explanation, Kaggle submission, model intuition, and reporting were split across several files. Those were merged into one workbook so the learning path is linear instead of fragmented.}
-
-\subsection{Clean Repository Layout}
+\subsection{Repository Layout}
 
 \begin{tabular}{p{0.29\linewidth} p{0.63\linewidth}}
 \toprule
 \textbf{Path} & \textbf{Purpose} \\
 \midrule
-\texttt{src/config.py} & Central runtime settings for evaluation and submission generation. \\
-\texttt{src/preprocess.py} & Builds the shared \texttt{content} field for documents and queries. \\
-\texttt{src/models.py} & TF-IDF, BM25+, dense retrieval, and hybrid reranking. \\
-\texttt{src/evaluation.py} & Precision@K, Recall@K, MRR, and MAP. \\
-\texttt{src/utils.py} & Data loading, CSV writing, and submission validation. \\
-\texttt{src/pipeline.py} & End-to-end orchestration with clearer helper functions. \\
-\texttt{notebooks/retrieval\_project\_workbook.ipynb} & One visual workbook with plots, diagrams, exercises, and code explanations. \\
-\texttt{report/retrieval\_project\_report.tex} & LaTeX source for this A4 report. \\
+\texttt{data/}             & Competition files: documents, queries, ground-truth, and sample submission. \\
+\texttt{notebooks/}        & Active notebook and generated CSV. \\
+\texttt{report/}           & LaTeX source and compiled PDF. \\
+\texttt{requirements.txt}  & Python dependencies. \\
 \bottomrule
 \end{tabular}
 
-\section{Dataset Snapshot}
+\subsection{Pipeline Overview}
 
-The local data used in this project contains:
+\begin{center}
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+  box/.style={draw=ink, rectangle, rounded corners=3pt, minimum width=2.8cm,
+              minimum height=1.15cm, align=center, thick},
+  >={Latex[length=2.2mm]}
+]
+\node[box, fill=softblue]   (data)   at (0,0)     {Competition data\\docs + queries};
+\node[box, fill=softgreen]  (prep)   at (3.8,0)   {Preprocessing\\\texttt{content} field};
+\node[box, fill=softorange] (models) at (7.6,0)   {TF-IDF / BM25+\\Embedding / Hybrid};
+\node[box, fill=softrose]   (eval)   at (11.4,0)  {Evaluation\\MAP / Recall};
+\node[box, fill=softgold]   (csv)    at (15.2,0)  {Kaggle CSV\\submission};
 
-\begin{itemize}
-\item 216{,}041 documents,
-\item 327 training queries,
-\item 141 test queries,
-\item 327 qrels entries for evaluation.
-\end{itemize}
+\draw[->, thick] (data) -- (prep);
+\draw[->, thick] (prep) -- (models);
+\draw[->, thick] (models) -- (eval);
+\draw[->, thick] (eval) -- (csv);
+\end{tikzpicture}
+}
+\end{center}
 
-The document categories are strongly imbalanced, which matters because retrieval behavior often changes by domain vocabulary.
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Dataset}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{tabular}{>{\bfseries}l r l}
+\toprule
+         & \textbf{Count} & \textbf{File} \\
+\midrule
+Documents       & 216{,}041 & \texttt{docs.json} \\
+Training queries &     327 & \texttt{queries\_train.json} \\
+Test queries     &     141 & \texttt{queries\_test.json} \\
+Training qrels   &     327 & \texttt{qgts\_train.json} \\
+\bottomrule
+\end{tabular}
+
+\medskip
+Each document has fields \texttt{id}, \texttt{text}, \texttt{title}, \texttt{tags} (list), and \texttt{category}.
+The five categories and their document counts:
 
 \begin{center}
 \begin{tikzpicture}[x=1cm,y=1cm]
 \draw[->, thick, color=ink] (0,0.6) -- (6.6,0.6) node[below right] {\small document count};
-\filldraw[fill=softblue, draw=ink, rounded corners=1.5pt] (0.2,4.8) rectangle (6.20,5.25);
-\node[anchor=east] at (0.05,5.02) {\texttt{tex}};
-\node[anchor=west] at (6.30,5.02) {\small 68184};
+\filldraw[fill=softblue, draw=ink, rounded corners=1.5pt]   (0.2,4.8) rectangle (6.20,5.25);
+\node[anchor=east] at (0.05,5.02)  {\texttt{tex}};
+\node[anchor=west] at (6.30,5.02)  {\small 68\,184};
 
-\filldraw[fill=softgreen, draw=ink, rounded corners=1.5pt] (0.2,3.9) rectangle (4.31,4.35);
-\node[anchor=east] at (0.05,4.12) {\texttt{unix}};
-\node[anchor=west] at (4.41,4.12) {\small 47382};
+\filldraw[fill=softgreen, draw=ink, rounded corners=1.5pt]  (0.2,3.9) rectangle (4.31,4.35);
+\node[anchor=east] at (0.05,4.12)  {\texttt{unix}};
+\node[anchor=west] at (4.41,4.12)  {\small 47\,382};
 
 \filldraw[fill=softorange, draw=ink, rounded corners=1.5pt] (0.2,3.0) rectangle (4.12,3.45);
-\node[anchor=east] at (0.05,3.22) {\texttt{gaming}};
-\node[anchor=west] at (4.22,3.22) {\small 45301};
+\node[anchor=east] at (0.05,3.22)  {\texttt{gaming}};
+\node[anchor=west] at (4.22,3.22)  {\small 45\,301};
 
-\filldraw[fill=softrose, draw=ink, rounded corners=1.5pt] (0.2,2.1) rectangle (2.93,2.55);
-\node[anchor=east] at (0.05,2.32) {\texttt{programmers}};
-\node[anchor=west] at (3.03,2.32) {\small 32176};
+\filldraw[fill=softrose, draw=ink, rounded corners=1.5pt]   (0.2,2.1) rectangle (2.93,2.55);
+\node[anchor=east] at (0.05,2.32)  {\texttt{programmers}};
+\node[anchor=west] at (3.03,2.32)  {\small 32\,176};
 
-\filldraw[fill=softgold, draw=ink, rounded corners=1.5pt] (0.2,1.2) rectangle (2.09,1.65);
-\node[anchor=east] at (0.05,1.42) {\texttt{android}};
-\node[anchor=west] at (2.19,1.42) {\small 22998};
+\filldraw[fill=softgold, draw=ink, rounded corners=1.5pt]   (0.2,1.2) rectangle (2.09,1.65);
+\node[anchor=east] at (0.05,1.42)  {\texttt{android}};
+\node[anchor=west] at (2.19,1.42)  {\small 22\,998};
 \end{tikzpicture}
 \end{center}
 
-\studybox{Small But Important Observation}{The dataset contains one empty document body. This is a good reminder that retrieval systems are not only ranking systems; they are also data-cleaning systems.}
+The ground-truth file maps each training query to a set of relevant document IDs with binary relevance labels.
 
-\section{Steps We Took}
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Preprocessing}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+All retrieval methods receive the same normalised input.
+A single \texttt{content} column is built from the raw fields:
+
+\begin{itemize}
+\item \textbf{Documents:} \texttt{title + text + tags} (tags are space-joined).
+\item \textbf{Queries:} \texttt{title + text}.
+\end{itemize}
+
+Every value is lowercased.
+Missing values (\texttt{None}, \texttt{NaN}), lists, and tuples are converted to
+plain strings by \texttt{value\_to\_text()}.
+
+\begin{lstlisting}[language=Python]
+def value_to_text(value):
+    if value is None:
+        return ''
+    if isinstance(value, (list, tuple)):
+        return ' '.join(str(v) for v in value)
+    if pd.isna(value):
+        return ''
+    return str(value)
+
+def create_content_column(df, columns):
+    out = df.copy()
+    for col in columns:
+        if col not in out.columns:
+            out[col] = ''
+    merged = []
+    for _, row in out[columns].iterrows():
+        text = ' '.join(
+            value_to_text(row[col]) for col in columns
+        ).strip().lower()
+        merged.append(text)
+    out['content'] = merged
+    out['id'] = out['id'].astype(str)
+    return out
+\end{lstlisting}
+
+\studybox{Why a single content field?}{%
+Using one unified text column ensures that TF-IDF, BM25+, and the embedding
+model all receive the same textual representation.  This eliminates
+inconsistencies in feature construction across methods.}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Retrieval Methods}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+The notebook implements four retrieval methods, covering sparse lexical,
+dense semantic, and hybrid approaches.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method 1: TF-IDF (Sparse Lexical Baseline)}
+
+TF-IDF (Term Frequency--Inverse Document Frequency) represents each document
+and query as a sparse vector of weighted term counts, then ranks documents by
+cosine similarity.
+
+\paragraph{Configuration.}
+The notebook uses \texttt{TfidfVectorizer} with:
+\begin{itemize}
+\item Unigrams and bigrams (\texttt{ngram\_range=(1,2)}).
+\item \texttt{min\_df=2} to prune extremely rare terms (fallback to 1 for small subsets).
+\item Lowercase normalisation.
+\end{itemize}
+
+\paragraph{Scoring.}
+\[
+\text{TF-IDF}(t,d) = \text{tf}(t,d) \cdot \log\!\left(\frac{N}{\text{df}(t)}\right)
+\]
+Documents are ranked by cosine similarity:
+\[
+\text{sim}(\mathbf{q},\mathbf{d}) = \frac{\mathbf{q} \cdot \mathbf{d}}{\lVert \mathbf{q} \rVert \, \lVert \mathbf{d} \rVert}
+\]
+
+\begin{lstlisting}[language=Python]
+vectorizer = TfidfVectorizer(
+    lowercase=True, ngram_range=(1, 2), min_df=2
+)
+doc_vectors = vectorizer.fit_transform(docs_df['content'])
+query_vectors = vectorizer.transform(queries_df['content'])
+scores = cosine_similarity(query_vectors, doc_vectors)
+\end{lstlisting}
+
+\studybox{Strengths}{Fast to compute on large corpora; bigrams preserve short
+technical expressions; easy to interpret.}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method 2: BM25+ (Probabilistic Lexical Model)}
+
+BM25+ is a probabilistic ranking function that extends TF saturation with
+document-length normalisation and a positive lower bound ($\delta$).
+
+\paragraph{Tokenisation.}
+A custom tokeniser normalises separators (\texttt{-}, \texttt{\_}, \texttt{/}
+$\to$ space) and extracts alphanumeric tokens via the regex
+\texttt{[a-z0-9]+}.
+
+\begin{lstlisting}[language=Python]
+_TOKEN_RE = re.compile(r'[a-z0-9]+')
+
+def tokenize(text):
+    txt = str(text or '').lower()
+    txt = re.sub(r'[-_/]', ' ', txt)
+    return _TOKEN_RE.findall(txt)
+\end{lstlisting}
+
+\paragraph{Scoring.}
+\[
+\text{BM25+}(q,d) = \sum_{t \in q} \text{IDF}(t)
+\left(
+  \frac{f(t,d)\,(k_1+1)}
+       {f(t,d) + k_1\!\left(1 - b + b\,\frac{|d|}{\text{avgdl}}\right)}
+  + \delta
+\right)
+\]
+
+The implementation uses \texttt{BM25Plus} from the \texttt{rank-bm25} library
+with default parameters ($k_1 = 1.5$, $b = 0.75$, $\delta = 1$).
+
+\begin{lstlisting}[language=Python]
+from rank_bm25 import BM25Plus
+tokenized_corpus = [tokenize(t) for t in docs_df['content']]
+bm25 = BM25Plus(tokenized_corpus)
+scores = bm25.get_scores(tokenize(query_text))
+\end{lstlisting}
+
+\studybox{Strengths}{Robust lexical ranker for technical text; handles term
+frequency saturation and document-length effects; fast inference without GPU.}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method 3: Embedding Search (Dense Semantic Retrieval)}
+
+Embedding search encodes documents and queries into dense vectors using a
+pre-trained Sentence-Transformer, then ranks by cosine similarity in the
+embedding space.
+
+\paragraph{Model.}
+The notebook uses \texttt{all-MiniLM-L6-v2}, a lightweight model that produces
+384-dimensional L2-normalised embeddings.  It captures semantic meaning
+beyond exact keyword matches.
+
+\paragraph{Scoring.}
+Since the embeddings are L2-normalised, cosine similarity reduces to a dot
+product:
+\[
+\text{sim}(\mathbf{q},\mathbf{d})
+  = \mathbf{q}^\top \mathbf{d}
+  \qquad (\lVert \mathbf{q} \rVert = \lVert \mathbf{d} \rVert = 1)
+\]
+
+\begin{lstlisting}[language=Python]
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+doc_embeddings = model.encode(
+    docs_df['content'].tolist(),
+    normalize_embeddings=True,
+)
+query_embeddings = model.encode(
+    queries_df['content'].tolist(),
+    normalize_embeddings=True,
+)
+# dot product = cosine similarity (L2-normalised)
+scores = query_embeddings @ doc_embeddings.T
+\end{lstlisting}
+
+\studybox{Strengths}{Captures semantic similarity (paraphrases, synonyms);
+works even when query and document share no common terms.  The trade-off is
+higher computational cost for encoding 216k documents.}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method 4: Hybrid BM25+ $\to$ Embedding Re-ranking}
+
+The hybrid method combines the strengths of BM25+ (high lexical recall, fast)
+with embedding search (semantic precision).  It operates in three stages:
 
 \begin{enumerate}
-\item \textbf{Inspected the raw JSON files.} We identified the shared fields used across documents and queries: title, text, tags, and category.
-\item \textbf{Normalized the text path.} We created one common \texttt{content} field so all models compare like with like.
-\item \textbf{Implemented multiple retrieval strategies.} The project supports TF-IDF, BM25+, dense retrieval, and a lexical-plus-semantic hybrid.
-\item \textbf{Evaluated with ranked-retrieval metrics.} We measured Precision@K, Recall@K, MRR, and MAP on the training split.
-\item \textbf{Generated Kaggle-ready files.} The pipeline writes per-model CSV files and validates the final submission against the sample template.
-\item \textbf{Cleaned the repository for learning.} We replaced the notebook sprawl with one workbook and one report.
+\item \textbf{Stage~1 --- BM25+ Candidate Retrieval.}
+      BM25+ scores all 216k documents and selects the top-$N$ candidates
+      per query (default $N = 500$).  This is fast and ensures lexical
+      recall.
+\item \textbf{Stage~2 --- Embedding Re-scoring.}
+      Only the $N$ candidate documents are encoded with the
+      Sentence-Transformer.  The embedding model computes cosine similarity
+      between each query and its candidates.
+\item \textbf{Stage~3 --- Score Fusion.}
+      BM25+ scores are min--max normalised to $[0,1]$, then fused with
+      embedding scores using a weighted sum:
+      \[
+      \text{score}_{\text{hybrid}}(q,d)
+        = \alpha \cdot \widehat{\text{BM25+}}(q,d)
+        + (1-\alpha) \cdot \text{sim}_{\text{emb}}(q,d)
+      \]
+      where $\alpha \in [0,1]$ controls the trade-off (default $\alpha=0.35$).
+      The top-$K$ documents by fused score form the final ranked list.
 \end{enumerate}
 
-\begin{center}
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[
-  node distance=1.7cm,
-  box/.style={draw=ink, rectangle, rounded corners=3pt, minimum width=2.7cm, minimum height=1.2cm, align=center, thick},
-  >={Latex[length=2.2mm]}
-]
-\node[box, fill=softblue] (load) {Load\\JSON files};
-\node[box, fill=softgreen, right=of load] (prep) {Preprocess\\shared content};
-\node[box, fill=softorange, right=of prep] (rank) {Retrieve\\TF-IDF / BM25 / hybrid};
-\node[box, fill=softrose, right=of rank] (eval) {Evaluate\\ranked metrics};
-\node[box, fill=softgold, right=of eval] (submit) {Submit\\CSV + validation};
+\paragraph{Key advantage.}
+By encoding only $N$ candidates instead of 216k documents, the hybrid method
+is much faster than full embedding search while still benefiting from
+semantic re-ranking.  BM25+ provides the recall base; the embedding model
+improves precision by promoting semantically relevant documents that BM25+
+might rank lower.
 
-\draw[->, thick] (load) -- (prep);
-\draw[->, thick] (prep) -- (rank);
-\draw[->, thick] (rank) -- (eval);
-\draw[->, thick] (eval) -- (submit);
-\end{tikzpicture}
-}
-\end{center}
+\begin{lstlisting}[language=Python]
+# Stage 1: BM25+ candidates
+scores = bm25.get_scores(query_tokens)
+top_n = np.argsort(scores)[-N:][::-1]
 
-\section{Modeling Choices}
+# Stage 2: encode only candidates
+cand_embs = model.encode(docs[top_n])
+emb_scores = query_emb @ cand_embs.T
 
-\subsection{TF-IDF}
+# Stage 3: fuse
+bm25_norm = (bm25_scores - min) / (max - min)
+fused = alpha * bm25_norm + (1-alpha) * emb_scores
+final_top_k = np.argsort(fused)[-K:][::-1]
+\end{lstlisting}
 
-TF-IDF is a strong lexical baseline because it rewards terms that are frequent in a document but not frequent everywhere in the corpus. In this project, it uses unigram and bigram features and cosine similarity.
+\studybox{Why this works}{BM25+ and embeddings have complementary failure
+modes.  BM25+ struggles with paraphrases and synonyms; embeddings can miss
+exact rare terms.  Fusing both yields better overall ranking than either
+alone.}
 
-\subsection{BM25+}
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method Comparison}
 
-BM25+ is another lexical ranker, but its scoring curve differs from TF-IDF. It usually handles term frequency saturation and document length normalization more explicitly, which can change the top-ranked items even when both models use the same input text.
-
-\subsection{Hybrid Semantic Reranking}
-
-The hybrid model works in two layers:
-
-\begin{center}
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[
-  box/.style={draw=ink, rectangle, rounded corners=3pt, minimum width=2.8cm, minimum height=1.1cm, align=center, thick},
-  >={Latex[length=2.2mm]}
-]
-\node[box, fill=softgold] (query) at (0,0) {Query};
-\node[box, fill=softblue] (lexical) at (3.6,0) {Lexical filter\\TF-IDF + BM25};
-\node[box, fill=softorange] (pool) at (7.2,0) {Candidate pool};
-\node[box, fill=softrose] (semantic) at (10.8,0) {Semantic reranker\\sentence-transformer};
-\node[box, fill=softgreen] (final) at (14.4,0) {Final ranked list};
-
-\draw[->, thick] (query) -- (lexical);
-\draw[->, thick] (lexical) -- (pool);
-\draw[->, thick] (pool) -- (semantic);
-\draw[->, thick] (semantic) -- (final);
-\end{tikzpicture}
-}
-\end{center}
-
-This is a useful design because a cheap lexical stage keeps recall high, while the semantic stage can repair some vocabulary mismatch errors.
-
-\studybox{Memorable Mental Model}{Think of the hybrid system as a two-stage interview process. TF-IDF and BM25 decide who gets invited into the room. The semantic reranker decides who should sit at the front of the table.}
-
-\subsection{Fast Study Benchmark}
-
-Inside the workbook, we run a smaller experiment on a \texttt{tex} subset with 30{,}000 documents and 12 queries so the student can iterate quickly.
-
-\begin{tabular}{lrrrr}
+\begin{tabular}{p{0.17\linewidth} p{0.18\linewidth} p{0.18\linewidth} p{0.35\linewidth}}
 \toprule
-\textbf{Model} & \textbf{Precision@10} & \textbf{Recall@10} & \textbf{MRR@10} & \textbf{MAP@10} \\
+\textbf{Method} & \textbf{Type} & \textbf{Representation} & \textbf{Key Characteristics} \\
 \midrule
-TF-IDF & 0.0750 & 0.3639 & 0.1605 & 0.1159 \\
-BM25+ & 0.0500 & 0.2042 & 0.3417 & 0.1646 \\
+TF-IDF   & Sparse lexical   & Sparse vectors   & Fast; relies on exact term overlap; bigrams help with short phrases \\
+BM25+    & Sparse lexical   & Token lists       & TF saturation + length normalisation; robust default for technical text \\
+Embedding & Dense semantic  & 384-d dense vectors & Captures meaning beyond keywords; requires transformer inference \\
+\textbf{Hybrid} & \textbf{Sparse + Dense} & \textbf{Both} & \textbf{BM25+ recall + embedding precision; re-ranks $N$ candidates} \\
 \bottomrule
 \end{tabular}
 
-These values are not presented as the final competition result. They are a teaching benchmark designed to make metric tradeoffs visible quickly.
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Evaluation}
+% ═══════════════════════════════════════════════════════════════════════════════
 
-\section{Submission Workflow}
+All four methods are evaluated on the 327 training queries using the provided
+ground-truth relevance judgements (\texttt{qgts\_train.json}).
 
-The project generates:
+\subsection{Metrics}
 
-\begin{itemize}
-\item one CSV per configured model,
-\item one final upload file based on the chosen \texttt{final\_model},
-\item a validation check against the sample submission template.
-\end{itemize}
+\paragraph{Mean Average Precision (MAP@K).}
+For each query, Average Precision is computed over the top-$K$ retrieved
+documents:
+\[
+\text{AP}(q) = \frac{1}{|\mathcal{R}_q|}
+  \sum_{k=1}^{K} \text{Precision}(k) \cdot \mathbb{1}[d_k \in \mathcal{R}_q]
+\]
+MAP@K is the mean of AP values over all evaluated queries.
 
-Centralizing runtime settings in \texttt{src/config.py} makes the pipeline easier to explain and safer to modify. Instead of hunting through \texttt{src/pipeline.py} for scattered constants, the user now has one place to adjust the main switches.
+\paragraph{Recall@K.}
+The fraction of relevant documents appearing in the top-$K$ results:
+\[
+\text{Recall@K}(q) = \frac{|\{d \in \text{top-}K\} \cap \mathcal{R}_q|}{|\mathcal{R}_q|}
+\]
 
-\section{How To Study The Project}
+\subsection{Implementation}
 
-Recommended order:
+\begin{lstlisting}[language=Python]
+def mean_average_precision(results, ground_truth, k=100):
+    aps = []
+    for item in results:
+        qid = str(item['query_id'])
+        if qid not in ground_truth:
+            continue
+        relevant = ground_truth[qid]
+        hits, score = 0, 0.0
+        for rank, doc_id in enumerate(
+                item['relevant_docs'][:k], 1):
+            if str(doc_id) in relevant:
+                hits += 1
+                score += hits / rank
+        aps.append(score / len(relevant) if relevant else 0.0)
+    return np.mean(aps) if aps else 0.0
+
+def recall_at_k(results, ground_truth, k=100):
+    recalls = []
+    for item in results:
+        qid = str(item['query_id'])
+        if qid not in ground_truth:
+            continue
+        relevant = ground_truth[qid]
+        retrieved = {str(d) for d in item['relevant_docs'][:k]}
+        recalls.append(
+            len(relevant & retrieved) / len(relevant)
+            if relevant else 0.0
+        )
+    return np.mean(recalls) if recalls else 0.0
+\end{lstlisting}
+
+\subsection{Results}
+
+The notebook runs all four models on the training queries and produces a
+comparison table.  The results determine which model is used for the final
+test submission.
+
+\begin{center}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Model} & \textbf{MAP@100} & \textbf{Recall@100} \\
+\midrule
+TF-IDF     & \textit{(from notebook)} & \textit{(from notebook)} \\
+BM25+      & \textit{(from notebook)} & \textit{(from notebook)} \\
+Embedding  & \textit{(from notebook)} & \textit{(from notebook)} \\
+\textbf{Hybrid}  & \textit{(from notebook)} & \textit{(from notebook)} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\studybox{Note}{Fill in the actual metric values after running the evaluation
+cells in the notebook.  The \texttt{FINAL\_MODEL} parameter is then set to
+the best-performing method.}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Submission Generation}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+The final submission is produced by running the selected model on the 141
+test queries and writing the output in Kaggle format.
+
+\subsection{Notebook Workflow}
 
 \begin{enumerate}
-\item Open the workbook and run the data summary cell.
-\item Study the category and length plots before reading the models.
-\item Run the pipeline diagram cell and explain it aloud from memory.
-\item Use the toy example to predict the ranking before executing the code.
-\item Run the fast benchmark and compare TF-IDF against BM25+.
-\item Read the appendix and complete at least two active-learning exercises.
+\item \textbf{Environment setup.}  Auto-detect the Kaggle input directory;
+      fall back to \texttt{../data} for local execution.
+\item \textbf{Preprocessing.}  Build the shared \texttt{content} column for
+      documents and queries.
+\item \textbf{Evaluation.}  Run all four models on 327 training queries;
+      compute MAP@100 and Recall@100.
+\item \textbf{Model selection.}  Set \texttt{FINAL\_MODEL} to the
+      best-performing method (configurable).
+\item \textbf{Test retrieval.}  Run the selected model on 141 test queries.
+\item \textbf{CSV writing.}  Serialise results in Kaggle format.
+\item \textbf{Preview.}  Display the first rows of the submission CSV.
 \end{enumerate}
 
-\appendix
+\begin{center}
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+  node distance=1.5cm,
+  box/.style={draw=ink, rectangle, rounded corners=3pt, minimum width=2.4cm,
+              minimum height=1.1cm, align=center, thick},
+  >={Latex[length=2.2mm]}
+]
+\node[box, fill=softblue]   (setup)  {Setup\\paths};
+\node[box, fill=softgreen,  right=of setup]  (prep)   {Preprocess\\content};
+\node[box, fill=softorange, right=of prep]   (eval)   {Evaluate\\4 models};
+\node[box, fill=softrose,   right=of eval]   (select) {Select\\best};
+\node[box, fill=softblue!60,right=of select] (test)   {Test\\retrieval};
+\node[box, fill=softgold,   right=of test]   (csv)    {Write\\CSV};
 
-\section{Appendix: Complete Explanations}
+\draw[->, thick] (setup)  -- (prep);
+\draw[->, thick] (prep)   -- (eval);
+\draw[->, thick] (eval)   -- (select);
+\draw[->, thick] (select) -- (test);
+\draw[->, thick] (test)   -- (csv);
+\end{tikzpicture}
+}
+\end{center}
 
-\subsection{Why The Shared \texttt{content} Field Matters}
+\subsection{Configuration}
 
-The data files contain several text sources. Documents have title, body text, and tags. Queries have title and text. If different models read different text combinations, then model comparisons stop being fair. The project avoids that problem by building one normalized \texttt{content} field for every item. Lowercasing is also done centrally so lexical models behave consistently.
-
-\subsection{Metric Formulas}
-
-\[
-\text{Precision@K} = \frac{\text{relevant items in top K}}{K}
-\]
-
-\[
-\text{Recall@K} = \frac{\text{relevant items in top K}}{\text{all relevant items}}
-\]
-
-\[
-\text{MRR@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\text{rank of first relevant result for } q}
-\]
-
-\[
-\text{AP@K} = \frac{1}{|R_q|} \sum_{k=1}^{K} \text{Precision@k} \cdot \mathbf{1}[\text{item at } k \text{ is relevant}]
-\]
-
-MAP is the mean of AP over queries.
-
-\subsection{Code Walkthrough}
-
-\begin{longtable}{p{0.22\linewidth} p{0.72\linewidth}}
+\begin{tabular}{>{\ttfamily}p{0.28\linewidth} p{0.60\linewidth}}
 \toprule
-\textbf{File} & \textbf{Explanation} \\
+\textbf{Parameter} & \textbf{Role} \\
 \midrule
-\endhead
-\texttt{src/config.py} & Stores evaluation and submission settings in one dataclass so the pipeline is easier to configure and explain. \\
-\texttt{src/preprocess.py} & Converts mixed cell values to text, joins selected fields, lowercases them, and guarantees a shared \texttt{content} representation. \\
-\texttt{src/models.py} & Implements four retrieval paths. TF-IDF uses sparse lexical vectors, BM25+ uses token-based probabilistic ranking, dense retrieval encodes text into embeddings, and the hybrid path reranks lexical candidates semantically. \\
-\texttt{src/evaluation.py} & Calculates retrieval metrics query by query, skipping queries without ground-truth relevance labels. \\
-\texttt{src/utils.py} & Reads JSON data, converts qrels into a lookup map, writes Kaggle CSV files in the correct row order, and validates submission format. \\
-\texttt{src/pipeline.py} & Splits the full workflow into preparation, evaluation, and submission-generation helpers so the code reads as a sequence of project steps instead of one large function. \\
-\texttt{main.py} & Keeps the command-line entrypoint minimal by delegating work to the pipeline module. \\
+FINAL\_MODEL    & Model for submission: \texttt{bm25}, \texttt{tfidf}, \texttt{embedding}, or \texttt{hybrid}. \\
+TOP\_K          & Documents per query (100). \\
+OUTPUT\_PATH    & Output CSV path (\texttt{solutions\_SeaFour.csv}). \\
+EMBEDDING\_MODEL & Sentence-Transformer model name (\texttt{all-MiniLM-L6-v2}). \\
+EMBEDDING\_BATCH & Encoding batch size (256). \\
+HYBRID\_BM25\_CANDIDATES & BM25+ candidates per query before re-ranking (500). \\
+HYBRID\_ALPHA & Weight for BM25+ in score fusion, $\alpha=0.35$ by default. \\
 \bottomrule
-\end{longtable}
+\end{tabular}
 
-\subsection{Practices And Active Learning Exercises}
+\subsection{CSV Format}
 
-\studybox{Exercise 1: Preprocessing Sensitivity}{Remove \texttt{tags} from the document \texttt{content} field and rerun the workbook benchmark. Write down which queries changed most and why.}
+The writer reads the sample submission template, preserves column order, and
+writes JSON-encoded document ID lists:
 
-\studybox{Exercise 2: Metric Tradeoffs}{Change \texttt{top\_k} from 10 to 5. Predict which metric should increase and which one may decrease before you run the code.}
+\begin{lstlisting}[language=Python]
+out_row = {
+    id_col: qid,
+    pred_col: json.dumps(pred_map[qid]),
+}
+if category_col is not None:
+    out_row[category_col] = row.get(category_col, '?') or '?'
+\end{lstlisting}
 
-\studybox{Exercise 3: Domain Shift}{Repeat the fast study benchmark in another category such as \texttt{android} or \texttt{unix}. Compare whether the same model still wins on the same metric.}
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Dependencies}
+% ═══════════════════════════════════════════════════════════════════════════════
 
-\studybox{Exercise 4: Error Analysis}{Pick one query where TF-IDF and BM25+ disagree. Inspect the titles of the top five retrieved documents and classify the error: vocabulary mismatch, noisy text, missing context, or data issue.}
+\begin{tabular}{l l}
+\toprule
+\textbf{Package} & \textbf{Purpose} \\
+\midrule
+\texttt{numpy}                & Array operations and sorting \\
+\texttt{pandas}               & DataFrame handling and I/O \\
+\texttt{scikit-learn}         & TF-IDF vectoriser and cosine similarity \\
+\texttt{rank-bm25}            & BM25+ implementation \\
+\texttt{sentence-transformers} & Pre-trained dense encoders \\
+\texttt{torch}                & Backend for sentence-transformers \\
+\bottomrule
+\end{tabular}
 
-\studybox{Exercise 5: Hybrid Reasoning}{Without running the hybrid model, identify two queries that would probably benefit from semantic reranking. Explain what lexical retrieval is likely to miss.}
+% ═══════════════════════════════════════════════════════════════════════════════
+\appendix
+\section{Mathematical Details}
+% ═══════════════════════════════════════════════════════════════════════════════
 
-\studybox{Exercise 6: Code Reading}{Read \texttt{run\_tfidf\_search}, \texttt{run\_bm25\_search}, and \texttt{evaluate\_retrieval}. Then explain the pipeline aloud in five sentences without opening the files again.}
+\paragraph{TF-IDF.}
+Weighs terms by local frequency and global rarity:
+\[
+\text{TF-IDF}(t,d) = \text{tf}(t,d) \cdot \log\!\left(\frac{N}{\text{df}(t)}\right)
+\]
 
-\subsection{Practical Study Advice}
+\paragraph{Cosine Similarity.}
+\[
+\cos(\theta) = \frac{\mathbf{q} \cdot \mathbf{d}}
+  {\lVert \mathbf{q} \rVert \; \lVert \mathbf{d} \rVert}
+\]
 
-\begin{itemize}
-\item Always connect a metric change to a ranking change on at least one real query.
-\item Use the pipeline diagram until you can redraw it from memory.
-\item Treat the workbook as the interactive lab and this PDF as the compact revision sheet.
-\item Do not jump to the hybrid model before you can explain lexical retrieval clearly.
-\end{itemize}
+\paragraph{BM25+.}
+\[
+\text{BM25+}(q,d) = \sum_{t \in q} \text{IDF}(t)
+\left(
+  \frac{f(t,d)\,(k_1+1)}
+       {f(t,d) + k_1\!\left(1 - b + b\,\frac{|d|}{\text{avgdl}}\right)}
+  + \delta
+\right)
+\]
+
+\paragraph{Sentence Embedding Similarity.}
+For L2-normalised vectors:
+\[
+\text{sim}(\mathbf{q}, \mathbf{d}) = \mathbf{q}^\top \mathbf{d}
+\]
+
+\paragraph{Hybrid Score Fusion.}
+\[
+\text{score}_{\text{hybrid}}(q,d)
+  = \alpha \cdot \frac{\text{BM25+}(q,d) - \min}{\max - \min}
+  + (1-\alpha) \cdot \text{sim}_{\text{emb}}(q,d)
+\]
+
+\paragraph{Top-K Selection.}
+\[
+\text{TopK}(q) = \operatorname{argsort}\!\bigl(\text{scores}(q)\bigr)[-K:][::-1]
+\]
 
 \end{document}
