@@ -1,86 +1,81 @@
 # Retrieval Engine Competition Project
 
-Information retrieval project for the Kaggle competition:
-https://www.kaggle.com/competitions/retrieval-engine-competition
+**Group:** SeaFour — Kaggle Retrieval Engine Competition
 
 ## Team
+
 - Maksym DOLHOV
 - Mehdi AGHAEI
 - Nguyen Ho Bao KHANH
-- Nima DAVARI
 
-## Repository Structure
+## Overview
+
+Notebook-first submission workflow implementing four retrieval methods:
+
+| Method | Type | Description |
+|--------|------|-------------|
+| **TF-IDF** | Sparse lexical | Unigram+bigram vectoriser, cosine similarity |
+| **BM25+** | Sparse lexical | Probabilistic ranking with length normalisation |
+| **Embedding** | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`) |
+| **Hybrid** | Sparse + Dense | BM25+ candidates → embedding re-ranking with score fusion |
+
+All methods are evaluated on training queries (MAP@100, Recall@100), then the best model produces the test submission.
+
+## Structure
+
 ```text
 retrieval_project/
-├── data/                      # local competition data (ignored in git)
+├── data/                              # competition data (not committed)
+│   ├── docs.json                      # 216,041 documents
+│   ├── queries_train.json             # 327 training queries
+│   ├── queries_test.json              # 141 test queries
+│   ├── qgts_train.json                # training ground truth
+│   └── submission.csv                 # sample submission template
 ├── notebooks/
-│   ├── kaggle/
-│   │   └── kaggle_submission.ipynb
-│   ├── phase1/
-│   │   └── phase1_retrieval_basics.ipynb
-│   ├── explain/
-│   │   ├── retrieval_explained.ipynb
-│   │   └── model_implementations.ipynb
-│   ├── reports/
-│   │   └── submission_report.ipynb
-│   ├── analysis/
-│   │   └── basic_analysis.ipynb
-│   └── assets/
-│       └── no_text_problem.png
-├── outputs/                   # generated submissions/metrics (ignored in git)
-├── src/
-│   ├── pipeline.py            # end-to-end orchestration
-│   ├── preprocess.py          # content construction + normalization
-│   ├── models.py              # TF-IDF / BM25 / Dense retrieval
-│   ├── evaluation.py          # Precision@K / Recall@K / MRR@K / MAP@K
-│   └── utils.py               # data loading + Kaggle CSV writer
-├── main.py                    # thin CLI entrypoint (calls src.pipeline)
-├── PIPELINE.md                # workflow details
+│   ├── kaggle-submission.ipynb        # active submission notebook
+│   └── solutions_SeaFour.csv          # generated submission CSV
+├── report/
+│   ├── retrieval_project_report.tex   # LaTeX source (XeLaTeX)
+│   └── retrieval_project_report.pdf   # compiled report
 ├── requirements.txt
+├── PIPELINE.md                        # pipeline documentation
 └── README.md
 ```
 
 ## Installation
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Required Data Files
-Put these in `data/`:
-- `docs.json`
-- `queries_train.json`
-- `queries_test.json`
-- `qgts_train.json`
-- `submission.csv`
+## Quick Start
 
-## Run Full Pipeline
+1. Place competition data files in `data/`.
+2. Open `notebooks/kaggle-submission.ipynb`.
+3. Run all cells.
+
+The notebook auto-detects `/kaggle/input` first, then falls back to `../data`.
+
+## Configuration
+
+| Parameter | Default | Options |
+|-----------|---------|--------|
+| `FINAL_MODEL` | `hybrid` | `bm25`, `tfidf`, `embedding`, `hybrid` |
+| `TOP_K` | `100` | documents per query |
+| `HYBRID_BM25_CANDIDATES` | `500` | BM25+ candidates before re-ranking |
+| `HYBRID_ALPHA` | `0.35` | BM25+ weight in score fusion |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
+
+## Report
+
+- Source: `report/retrieval_project_report.tex`
+- PDF: `report/retrieval_project_report.pdf`
+
+Build manually:
 ```bash
-python3 main.py
+cd report && xelatex -interaction=nonstopmode retrieval_project_report.tex
 ```
 
-This command:
-1. loads and preprocesses data,
-2. evaluates TF-IDF and BM25 on training queries,
-3. generates test-set submissions,
-4. writes `outputs/solutions_SeaFour.csv` for Kaggle upload.
-
-Select final upload model in `src/pipeline.py` with `FINAL_MODEL` (`"bm25"`, `"tfidf"`, or `"dense"`).
-To include dense model comparison during training evaluation, set `RUN_DENSE_EVAL=True`.
-
-## Notebooks
-- `notebooks/kaggle/kaggle_submission.ipynb`:
-  Minimal, reproducible notebook for Kaggle submission generation only.
-- `notebooks/explain/retrieval_explained.ipynb`:
-  Explanation notebook describing data flow, ranking logic, and why models behave differently.
-- `notebooks/explain/model_implementations.ipynb`:
-  Model mechanics from scratch so retrieval methods are transparent and not black boxes.
-- `notebooks/phase1/phase1_retrieval_basics.ipynb`:
-  Phase-1 benchmark notebook comparing TF-IDF, BM25+, and embedding retrieval with standard IR metrics.
-- `notebooks/reports/submission_report.ipynb`:
-  Validation report notebook that checks `solutions_SeaFour.csv` against `data/submission.csv`.
-
-## Submission Guidance
-- Moodle: submit full codebase + report PDF.
-- Kaggle: submit only `notebooks/kaggle/kaggle_submission.ipynb` (or an equivalent minimal retrieval-to-CSV notebook).
+With VS Code LaTeX Workshop, the PDF auto-builds on every save.
