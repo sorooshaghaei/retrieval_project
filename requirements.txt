@@ -5,4 +5,3 @@ rank-bm25
 sentence-transformers
 torch
 jupyter
-matplotlib
