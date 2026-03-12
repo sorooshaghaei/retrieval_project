@@ -310,6 +310,37 @@ def tokenize(text):
 \right)
 \]
 
+\paragraph{Difference between BM25 and BM25+.}
+Standard BM25 uses the same saturation and length-normalisation term, but it
+does \emph{not} add the positive constant $\delta$:
+\[
+\text{BM25}(q,d) = \sum_{t \in q} \text{IDF}(t)
+\left(
+  \frac{f(t,d)\,(k_1+1)}
+       {f(t,d) + k_1\!\left(1 - b + b\,\frac{|d|}{\text{avgdl}}\right)}
+\right)
+\]
+BM25+ therefore differs from BM25 in one precise place: every matched query
+term receives an additional positive floor through $\delta$.  In practice,
+this reduces the tendency of standard BM25 to penalise long documents too
+aggressively after length normalisation.  That difference is useful in this
+project because the merged \texttt{content} field combines title, body, and
+tags, which creates noticeable variation in document length across the corpus.
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.23\linewidth}
+                >{\raggedright\arraybackslash}p{0.29\linewidth}
+                >{\raggedright\arraybackslash}p{0.34\linewidth}}
+\toprule
+\textbf{Aspect} & \textbf{BM25} & \textbf{BM25+} \\
+\midrule
+Matched-term contribution & Can become very small in long documents & Keeps a positive floor via $\delta$ \\
+Length normalisation effect & Stronger penalty on verbose documents & Softer penalty once a term is present \\
+Why it matters here & Good lexical baseline & Better fit for mixed-length technical posts and merged fields \\
+\bottomrule
+\end{tabular}
+\end{center}
+
 The implementation uses \texttt{BM25Plus} from the \texttt{rank-bm25} library
 with default parameters ($k_1 = 1.5$, $b = 0.75$, $\delta = 1$).
 
@@ -365,7 +396,7 @@ works even when query and document share no common terms.  The trade-off is
 higher computational cost for encoding 216k documents.}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\subsection{Method 4: Hybrid BM25+ $\to$ Embedding Re-ranking}
+\subsection{Method 4: Hybrid BM25+ \texorpdfstring{$\to$}{->} Embedding Re-ranking}
 
 The hybrid method combines the strengths of BM25+ (high lexical recall, fast)
 with embedding search (semantic precision).  It operates in three stages:
@@ -421,7 +452,10 @@ alone.}
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Method Comparison}
 
-\begin{tabular}{p{0.17\linewidth} p{0.18\linewidth} p{0.18\linewidth} p{0.35\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.17\linewidth}
+                >{\raggedright\arraybackslash}p{0.18\linewidth}
+                >{\raggedright\arraybackslash}p{0.18\linewidth}
+                >{\raggedright\arraybackslash}p{0.35\linewidth}}
 \toprule
 \textbf{Method} & \textbf{Type} & \textbf{Representation} & \textbf{Key Characteristics} \\
 \midrule
@@ -633,6 +667,11 @@ Weighs terms by local frequency and global rarity:
   + \delta
 \right)
 \]
+For comparison, standard BM25 omits the additive $\delta$ term and uses only
+the saturation plus length-normalisation fraction.  BM25+ was preferred in the
+notebook because once a query term is present, the extra $\delta$ keeps its
+contribution positive instead of letting long-document normalisation push that
+term's score too low.
 
 \paragraph{Sentence Embedding Similarity.}
 For L2-normalised vectors:
