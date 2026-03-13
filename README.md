@@ -21,7 +21,7 @@ Notebook-first submission workflow implementing the three required Phase 1 retri
 | **BM25+** | Sparse lexical | Probabilistic ranking with length normalisation |
 | **Embedding** | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`) |
 
-All required methods are evaluated on training queries with `Precision@k`, `Recall@k`, `MRR@k`, and `MAP@k`. The final Kaggle submission is produced with the embedding model.
+All required methods are evaluated on training queries with `Precision@k`, `Recall@k`, `MRR@k`, and `Accuracy`. In the current stage-0 setup, `Accuracy` is reported as `0.0`. The final Kaggle submission is produced with the embedding model.
 
 ## Structure
 
@@ -49,7 +49,7 @@ retrieval_project/
 │   ├── pipeline.py            # end-to-end orchestration
 │   ├── preprocess.py          # content construction + normalization
 │   ├── models.py              # TF-IDF / BM25 / Dense retrieval
-│   ├── evaluation.py          # Precision@K / Recall@K / MRR@K / MAP@K
+│   ├── evaluation.py          # Precision@K / Recall@K / MRR@K / Accuracy
 │   └── utils.py               # data loading + Kaggle CSV writer
 ├── main.py                    # thin CLI entrypoint (calls src.pipeline)
 ├── PIPELINE.md                # workflow details
