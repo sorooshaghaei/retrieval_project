@@ -8,11 +8,29 @@ https://www.kaggle.com/competitions/retrieval-engine-competition
 - Mehdi AGHAEI
 - Nguyen Ho Bao KHANH
 
+<<<<<<< Updated upstream
 ## Repository Structure
+=======
+## Overview
+
+Notebook-first submission workflow implementing the three required Phase 1 retrieval methods:
+
+| Method | Type | Description |
+|--------|------|-------------|
+| **TF-IDF** | Sparse lexical | Unigram+bigram vectoriser, cosine similarity |
+| **BM25+** | Sparse lexical | Probabilistic ranking with length normalisation |
+| **Embedding** | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`) |
+
+All required methods are evaluated on training queries with `Precision@k`, `Recall@k`, `MRR@k`, and `MAP@k`. The final Kaggle submission is produced with the embedding model.
+
+## Structure
+
+>>>>>>> Stashed changes
 ```text
 retrieval_project/
 ├── data/                      # local competition data (ignored in git)
 ├── notebooks/
+<<<<<<< Updated upstream
 │   ├── kaggle/
 │   │   └── kaggle_submission.ipynb
 │   ├── phase1/
@@ -35,6 +53,13 @@ retrieval_project/
 │   └── utils.py               # data loading + Kaggle CSV writer
 ├── main.py                    # thin CLI entrypoint (calls src.pipeline)
 ├── PIPELINE.md                # workflow details
+=======
+│   ├── kaggle-submission.ipynb        # Phase 1 notebook
+│   └── solutions_SeaFour.csv          # generated submission CSV
+├── report/
+│   ├── retrieval_project_report.tex   # LaTeX source (XeLaTeX)
+│   └── retrieval_project_report.pdf   # compiled report
+>>>>>>> Stashed changes
 ├── requirements.txt
 └── README.md
 ```
@@ -54,7 +79,30 @@ Put these in `data/`:
 - `qgts_train.json`
 - `submission.csv`
 
+<<<<<<< Updated upstream
 ## Run Full Pipeline
+=======
+1. Place competition data files in `data/`.
+2. Open `notebooks/kaggle-submission.ipynb`.
+3. Run all cells.
+
+The notebook auto-detects `/kaggle/input` first, then falls back to `../data`.
+
+## Configuration
+
+| Parameter | Default | Options |
+|-----------|---------|--------|
+| `FINAL_MODEL` | `embedding` | `embedding` |
+| `TOP_K` | `100` | documents per query |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
+
+## Report
+
+- Source: `report/retrieval_project_report.tex`
+- PDF: `report/retrieval_project_report.pdf`
+
+Build manually:
+>>>>>>> Stashed changes
 ```bash
 python3 main.py
 ```
