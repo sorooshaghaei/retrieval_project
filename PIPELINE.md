@@ -36,7 +36,7 @@ Training queries are evaluated using `qgts_train.json` with:
 - Precision@K
 - Recall@K
 - MRR@K
-- MAP@K
+- Accuracy
 
 Implementation is in `src/evaluation.py`.
 `src/pipeline.py` (triggered by `main.py`) evaluates TF-IDF and BM25 by default.
@@ -63,7 +63,7 @@ Outputs are written to `outputs/`:
 1. **Environment setup** — auto-detect Kaggle or local `data/` directory.
 2. **Preprocessing** — build shared `content` column for docs and queries.
 3. **Dataset analysis** — inspect fields, counts, lengths, categories, and relevance-judgement distributions.
-4. **Evaluation** — run TF-IDF, BM25+, and embedding retrieval on 327 training queries; compute `Precision@k`, `Recall@k`, `MRR@k`, and `MAP@k`.
+4. **Evaluation** — run TF-IDF, BM25+, and embedding retrieval on 327 training queries; compute `Precision@k`, `Recall@k`, `MRR@k`, and `Accuracy`. In the current stage-0 setup, `Accuracy = 0.0`.
 5. **Embedding inspection** — print embedding shapes and project them in 2D with t-SNE.
 6. **Test retrieval** — run the embedding model on 141 test queries.
 7. **CSV writing** — serialise results in Kaggle format.
