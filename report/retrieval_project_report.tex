@@ -72,12 +72,12 @@ Nguyen Ho Bao KHANH \\
 \end{tabular}\\[1.2cm]
 
 \studybox{Project Scope}{%
-This report documents the Phase~1 notebook-based workflow for the Kaggle
+This report documents the notebook-based submission workflow for the Kaggle
 retrieval competition. The implementation lives in
-\texttt{notebooks/kaggle-submission.ipynb}. The pipeline loads the competition data,
-preprocesses text, runs the three required retrieval methods (TF-IDF, BM25+,
-and Embedding Search), evaluates them on the training set, inspects the
-embedding space, and writes the final submission CSV with the embedding
+\texttt{notebooks/kaggle-submission.ipynb}, which loads the competition data,
+preprocesses text, runs four retrieval methods (TF-IDF, BM25+, Embedding
+Search, and a Hybrid BM25+\,+\,Embedding re-ranking approach), evaluates
+them on the training set, and writes the final submission CSV with the best
 model.}
 
 \vspace{0.6cm}
@@ -132,8 +132,8 @@ One Kaggle notebook contains all the logic needed to reproduce the submission fi
 ]
 \node[box, fill=softblue]   (data)   at (0,0)     {Competition data\\docs + queries};
 \node[box, fill=softgreen]  (prep)   at (3.8,0)   {Preprocessing\\\texttt{content} field};
-\node[box, fill=softorange] (models) at (7.6,0)   {TF-IDF / BM25+\\Embedding};
-\node[box, fill=softrose]   (eval)   at (11.4,0)  {Evaluation\\Precision / Recall / MRR};
+\node[box, fill=softorange] (models) at (7.6,0)   {TF-IDF / BM25+\\Embedding / Hybrid};
+\node[box, fill=softrose]   (eval)   at (11.4,0)  {Evaluation\\MAP / Recall};
 \node[box, fill=softgold]   (csv)    at (15.2,0)  {Kaggle CSV\\submission};
 
 \draw[->, thick] (data) -- (prep);
@@ -241,8 +241,8 @@ inconsistencies in feature construction across methods.}
 \section{Retrieval Methods}
 % ═══════════════════════════════════════════════════════════════════════════════
 
-The notebook implements the three required retrieval methods, covering sparse
-lexical and dense semantic retrieval.
+The notebook implements four retrieval methods, covering sparse lexical,
+dense semantic, and hybrid approaches.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Method 1: TF-IDF (Sparse Lexical Baseline)}
@@ -365,6 +365,60 @@ works even when query and document share no common terms.  The trade-off is
 higher computational cost for encoding 216k documents.}
 
 % ─────────────────────────────────────────────────────────────────────────────
+\subsection{Method 4: Hybrid BM25+ $\to$ Embedding Re-ranking}
+
+The hybrid method combines the strengths of BM25+ (high lexical recall, fast)
+with embedding search (semantic precision).  It operates in three stages:
+
+\begin{enumerate}
+\item \textbf{Stage~1 --- BM25+ Candidate Retrieval.}
+      BM25+ scores all 216k documents and selects the top-$N$ candidates
+      per query (default $N = 500$).  This is fast and ensures lexical
+      recall.
+\item \textbf{Stage~2 --- Embedding Re-scoring.}
+      Only the $N$ candidate documents are encoded with the
+      Sentence-Transformer.  The embedding model computes cosine similarity
+      between each query and its candidates.
+\item \textbf{Stage~3 --- Score Fusion.}
+      BM25+ scores are min--max normalised to $[0,1]$, then fused with
+      embedding scores using a weighted sum:
+      \[
+      \text{score}_{\text{hybrid}}(q,d)
+        = \alpha \cdot \widehat{\text{BM25+}}(q,d)
+        + (1-\alpha) \cdot \text{sim}_{\text{emb}}(q,d)
+      \]
+      where $\alpha \in [0,1]$ controls the trade-off (default $\alpha=0.35$).
+      The top-$K$ documents by fused score form the final ranked list.
+\end{enumerate}
+
+\paragraph{Key advantage.}
+By encoding only $N$ candidates instead of 216k documents, the hybrid method
+is much faster than full embedding search while still benefiting from
+semantic re-ranking.  BM25+ provides the recall base; the embedding model
+improves precision by promoting semantically relevant documents that BM25+
+might rank lower.
+
+\begin{lstlisting}[language=Python]
+# Stage 1: BM25+ candidates
+scores = bm25.get_scores(query_tokens)
+top_n = np.argsort(scores)[-N:][::-1]
+
+# Stage 2: encode only candidates
+cand_embs = model.encode(docs[top_n])
+emb_scores = query_emb @ cand_embs.T
+
+# Stage 3: fuse
+bm25_norm = (bm25_scores - min) / (max - min)
+fused = alpha * bm25_norm + (1-alpha) * emb_scores
+final_top_k = np.argsort(fused)[-K:][::-1]
+\end{lstlisting}
+
+\studybox{Why this works}{BM25+ and embeddings have complementary failure
+modes.  BM25+ struggles with paraphrases and synonyms; embeddings can miss
+exact rare terms.  Fusing both yields better overall ranking than either
+alone.}
+
+% ─────────────────────────────────────────────────────────────────────────────
 \subsection{Method Comparison}
 
 \begin{tabular}{p{0.17\linewidth} p{0.18\linewidth} p{0.18\linewidth} p{0.35\linewidth}}
@@ -374,6 +428,7 @@ higher computational cost for encoding 216k documents.}
 TF-IDF   & Sparse lexical   & Sparse vectors   & Fast; relies on exact term overlap; bigrams help with short phrases \\
 BM25+    & Sparse lexical   & Token lists       & TF saturation + length normalisation; robust default for technical text \\
 Embedding & Dense semantic  & 384-d dense vectors & Captures meaning beyond keywords; requires transformer inference \\
+\textbf{Hybrid} & \textbf{Sparse + Dense} & \textbf{Both} & \textbf{BM25+ recall + embedding precision; re-ranks $N$ candidates} \\
 \bottomrule
 \end{tabular}
 
@@ -381,17 +436,19 @@ Embedding & Dense semantic  & 384-d dense vectors & Captures meaning beyond keyw
 \section{Evaluation}
 % ═══════════════════════════════════════════════════════════════════════════════
 
-All three methods are evaluated on the 327 training queries using the provided
+All four methods are evaluated on the 327 training queries using the provided
 ground-truth relevance judgements (\texttt{qgts\_train.json}).
 
 \subsection{Metrics}
 
-\paragraph{Precision@K.}
-Precision measures how many of the retrieved documents are actually relevant:
+\paragraph{Mean Average Precision (MAP@K).}
+For each query, Average Precision is computed over the top-$K$ retrieved
+documents:
 \[
-\text{Precision@K}(q) =
-\frac{|\{d \in \text{top-}K\} \cap \mathcal{R}_q|}{K}
+\text{AP}(q) = \frac{1}{|\mathcal{R}_q|}
+  \sum_{k=1}^{K} \text{Precision}(k) \cdot \mathbb{1}[d_k \in \mathcal{R}_q]
 \]
+MAP@K is the mean of AP values over all evaluated queries.
 
 \paragraph{Recall@K.}
 The fraction of relevant documents appearing in the top-$K$ results:
@@ -399,55 +456,68 @@ The fraction of relevant documents appearing in the top-$K$ results:
 \text{Recall@K}(q) = \frac{|\{d \in \text{top-}K\} \cap \mathcal{R}_q|}{|\mathcal{R}_q|}
 \]
 
-\paragraph{MRR@K.}
-Mean Reciprocal Rank measures how early the first relevant document appears:
-\[
-\text{MRR@K}(q) =
-\frac{1}{\operatorname{rank}(\text{first relevant document in top-}K)}
-\]
-
-\paragraph{MAP@K.}
-MAP@K is kept as an additional ranking-quality metric because it is useful
-for comparing the full ranked lists returned by the models.
-
 \subsection{Implementation}
 
 \begin{lstlisting}[language=Python]
-metrics = {
-    f"Precision@{k}": precision_at_k(results, ground_truth, k=k),
-    f"Recall@{k}": recall_at_k(results, ground_truth, k=k),
-    f"MRR@{k}": mrr_at_k(results, ground_truth, k=k),
-    f"MAP@{k}": map_at_k(results, ground_truth, k=k),
-}
+def mean_average_precision(results, ground_truth, k=100):
+    aps = []
+    for item in results:
+        qid = str(item['query_id'])
+        if qid not in ground_truth:
+            continue
+        relevant = ground_truth[qid]
+        hits, score = 0, 0.0
+        for rank, doc_id in enumerate(
+                item['relevant_docs'][:k], 1):
+            if str(doc_id) in relevant:
+                hits += 1
+                score += hits / rank
+        aps.append(score / len(relevant) if relevant else 0.0)
+    return np.mean(aps) if aps else 0.0
+
+def recall_at_k(results, ground_truth, k=100):
+    recalls = []
+    for item in results:
+        qid = str(item['query_id'])
+        if qid not in ground_truth:
+            continue
+        relevant = ground_truth[qid]
+        retrieved = {str(d) for d in item['relevant_docs'][:k]}
+        recalls.append(
+            len(relevant & retrieved) / len(relevant)
+            if relevant else 0.0
+        )
+    return np.mean(recalls) if recalls else 0.0
 \end{lstlisting}
 
 \subsection{Results}
 
-The notebook runs all three models on the training queries and produces a
+The notebook runs all four models on the training queries and produces a
 comparison table.  The results determine which model is used for the final
 test submission.
 
 \begin{center}
-\begin{tabular}{l c c c c}
+\begin{tabular}{l c c}
 \toprule
-\textbf{Model} & \textbf{Precision@100} & \textbf{Recall@100} & \textbf{MRR@100} & \textbf{MAP@100} \\
+\textbf{Model} & \textbf{MAP@100} & \textbf{Recall@100} \\
 \midrule
-TF-IDF     & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
-BM25+      & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
-Embedding  & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
+TF-IDF     & \textit{(from notebook)} & \textit{(from notebook)} \\
+BM25+      & \textit{(from notebook)} & \textit{(from notebook)} \\
+Embedding  & \textit{(from notebook)} & \textit{(from notebook)} \\
+\textbf{Hybrid}  & \textit{(from notebook)} & \textit{(from notebook)} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \studybox{Note}{Fill in the actual metric values after running the evaluation
-cells in the notebook.  In the cleaned Phase~1 pipeline, the final submission
-model is fixed to \texttt{embedding}.}
+cells in the notebook.  The \texttt{FINAL\_MODEL} parameter is then set to
+the best-performing method.}
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Submission Generation}
 % ═══════════════════════════════════════════════════════════════════════════════
 
-The final submission is produced by running the embedding model on the 141
+The final submission is produced by running the selected model on the 141
 test queries and writing the output in Kaggle format.
 
 \subsection{Notebook Workflow}
@@ -457,14 +527,11 @@ test queries and writing the output in Kaggle format.
       fall back to \texttt{../data} for local execution.
 \item \textbf{Preprocessing.}  Build the shared \texttt{content} column for
       documents and queries.
-\item \textbf{Dataset analysis.}  Inspect the fields, counts, lengths, categories,
-      and relevance-judgement distributions.
-\item \textbf{Evaluation.}  Run TF-IDF, BM25+, and embedding retrieval on the
-      327 training queries; compute Precision@100, Recall@100, MRR@100, and
-      MAP@100.
-\item \textbf{Embedding inspection.}  Print embedding shapes and visualise a
-      2D t-SNE projection.
-\item \textbf{Test retrieval.}  Run the embedding model on the 141 test queries.
+\item \textbf{Evaluation.}  Run all four models on 327 training queries;
+      compute MAP@100 and Recall@100.
+\item \textbf{Model selection.}  Set \texttt{FINAL\_MODEL} to the
+      best-performing method (configurable).
+\item \textbf{Test retrieval.}  Run the selected model on 141 test queries.
 \item \textbf{CSV writing.}  Serialise results in Kaggle format.
 \item \textbf{Preview.}  Display the first rows of the submission CSV.
 \end{enumerate}
@@ -479,9 +546,9 @@ test queries and writing the output in Kaggle format.
 ]
 \node[box, fill=softblue]   (setup)  {Setup\\paths};
 \node[box, fill=softgreen,  right=of setup]  (prep)   {Preprocess\\content};
-\node[box, fill=softorange, right=of prep]   (eval)   {Evaluate\\3 models};
-\node[box, fill=softrose,   right=of eval]   (select) {Inspect\\embeddings};
-\node[box, fill=softblue!60,right=of select] (test)   {Embedding\\submission};
+\node[box, fill=softorange, right=of prep]   (eval)   {Evaluate\\4 models};
+\node[box, fill=softrose,   right=of eval]   (select) {Select\\best};
+\node[box, fill=softblue!60,right=of select] (test)   {Test\\retrieval};
 \node[box, fill=softgold,   right=of test]   (csv)    {Write\\CSV};
 
 \draw[->, thick] (setup)  -- (prep);
@@ -499,11 +566,13 @@ test queries and writing the output in Kaggle format.
 \toprule
 \textbf{Parameter} & \textbf{Role} \\
 \midrule
-FINAL\_MODEL    & Model for submission: \texttt{embedding}. \\
+FINAL\_MODEL    & Model for submission: \texttt{bm25}, \texttt{tfidf}, \texttt{embedding}, or \texttt{hybrid}. \\
 TOP\_K          & Documents per query (100). \\
 OUTPUT\_PATH    & Output CSV path (\texttt{solutions\_SeaFour.csv}). \\
 EMBEDDING\_MODEL & Sentence-Transformer model name (\texttt{all-MiniLM-L6-v2}). \\
 EMBEDDING\_BATCH & Encoding batch size (256). \\
+HYBRID\_BM25\_CANDIDATES & BM25+ candidates per query before re-ranking (500). \\
+HYBRID\_ALPHA & Weight for BM25+ in score fusion, $\alpha=0.35$ by default. \\
 \bottomrule
 \end{tabular}
 
@@ -532,7 +601,6 @@ if category_col is not None:
 \texttt{numpy}                & Array operations and sorting \\
 \texttt{pandas}               & DataFrame handling and I/O \\
 \texttt{scikit-learn}         & TF-IDF vectoriser and cosine similarity \\
-\texttt{matplotlib}           & 2D visualisation of embedding projections \\
 \texttt{rank-bm25}            & BM25+ implementation \\
 \texttt{sentence-transformers} & Pre-trained dense encoders \\
 \texttt{torch}                & Backend for sentence-transformers \\
@@ -570,6 +638,13 @@ Weighs terms by local frequency and global rarity:
 For L2-normalised vectors:
 \[
 \text{sim}(\mathbf{q}, \mathbf{d}) = \mathbf{q}^\top \mathbf{d}
+\]
+
+\paragraph{Hybrid Score Fusion.}
+\[
+\text{score}_{\text{hybrid}}(q,d)
+  = \alpha \cdot \frac{\text{BM25+}(q,d) - \min}{\max - \min}
+  + (1-\alpha) \cdot \text{sim}_{\text{emb}}(q,d)
 \]
 
 \paragraph{Top-K Selection.}
