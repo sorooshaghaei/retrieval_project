@@ -96,6 +96,7 @@ data/**
 #################################
 outputs/
 results/
+cache/
 runs/
 models/
 checkpoints/
