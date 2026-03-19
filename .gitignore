@@ -1,102 +1,29 @@
-#################################
 # OS / system
-#################################
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon?
 ._*
-.Spotlight-V100
 .Trashes
-.fseventsd
+.Spotlight-V100
 
-#################################
-# Python
-#################################
+# Python / venv
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Packaging / builds
-build/
-dist/
-*.egg-info/
-.eggs/
-pip-wheel-metadata/
-*.whl
-
-#################################
-# Virtual environments
-#################################
 .venv/
-.venv
 venv/
 env/
-ENV/
-src/.venv
 
-#################################
 # Jupyter
-#################################
 .ipynb_checkpoints/
-**/.ipynb_checkpoints/
-notebooks/**/*.csv
+kaggle/**/*.csv
 
-#################################
-# Tests / coverage
-#################################
-.pytest_cache/
-.tox/
-.nox/
-.coverage
-.coverage.*
-htmlcov/
-coverage.xml
-
-#################################
-# Type checkers / linters
-#################################
-.mypy_cache/
-.pyright/
-.pytype/
-.pyre/
-.ruff_cache/
-
-#################################
-# Logs
-#################################
-*.log
-pip-log.txt
-
-#################################
-# IDEs / editors
-#################################
-.vscode/
-.idea/
-*.swp
-*.swo
-
-#################################
-# Secrets / env files
-#################################
-.env
-.env.*
-!.env.example
-
-#################################
-# Data (DO NOT COMMIT)
-#################################
-# Ignore everything under data, but keep folder structure
+# Data (do not commit)
 data/**
 !data/.gitkeep
 !data/**/.gitkeep
 
-#################################
-# Common ML outputs (usually huge)
-#################################
+# Outputs / caches
+cache/
 outputs/
 results/
-cache/
 runs/
 models/
 checkpoints/
@@ -105,29 +32,27 @@ mlruns/
 lightning_logs/
 tensorboard/
 
-#################################
-# Report temp files
-#################################
-report/~$*
+# Reports (build artifacts)
+reports/**/*.aux
+reports/**/*.bbl
+reports/**/*.blg
+reports/**/*.log
+reports/**/*.out
+reports/**/*.toc
+reports/**/*.synctex.gz
+reports/**/*.fdb_latexmk
+reports/**/*.fls
+reports/build/
+reports/~$*
 
-# LaTeX (optional)
-report/**/*.aux
-report/**/*.bbl
-report/**/*.blg
-report/**/*.log
-report/**/*.out
-report/**/*.toc
-report/**/*.synctex.gz
-report/**/*.fdb_latexmk
-report/**/*.fls
-report/build/
+# Logs & env
+*.log
+.env
+.env.*
+!.env.example
 
-#################################
-# Keep notebooks and reports
-#################################
-!notebooks/
-!notebooks/**/*.ipynb
-!report/
-!report/**/*.ipynb
-!report/**/*.md
-!report/**/*.pdf
+# IDEs / editors
+.vscode/
+.idea/
+*.swp
+*.swo

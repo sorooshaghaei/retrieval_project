@@ -74,7 +74,7 @@ Nguyen Ho Bao KHANH \\
 \studybox{Project Scope}{%
 This report documents the notebook-based submission workflow for the Kaggle
 retrieval competition. The implementation lives in
-\texttt{notebooks/kaggle-submission.ipynb}, which loads the competition data,
+\texttt{kaggle/kaggle\_submission.ipynb}, which loads the competition data,
 preprocesses text, runs four retrieval methods (TF-IDF, BM25+, Embedding
 Search, and a Hybrid BM25+\,+\,Embedding re-ranking approach), evaluates
 them on the training set, and writes the final submission CSV with the best
@@ -83,17 +83,14 @@ model.}
 \vspace{0.6cm}
 
 \begin{tabular}{>{\bfseries}p{0.28\linewidth} p{0.58\linewidth}}
-Main workflow   & \texttt{notebooks/kaggle-submission.ipynb} \\
-Submission file & \texttt{notebooks/solutions\_SeaFour.csv} \\
-Report          & \texttt{report/retrieval\_project\_report.pdf} \\
-Date            & March 1, 2026 \\
+Main workflow   & \texttt{kaggle/kaggle\_submission.ipynb} \\
+Submission file & \texttt{kaggle/solutions\_SeaFour.csv} \\
+Report          & \texttt{reports/retrieval\_project\_report.pdf} \\
+Date            & \today \\
 \end{tabular}
 
 \vfill
 \end{titlepage}
-
-\tableofcontents
-\newpage
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Project At A Glance}
@@ -103,9 +100,9 @@ The submission workflow is notebook-first.
 One Kaggle notebook contains all the logic needed to reproduce the submission file:
 
 \begin{itemize}
-\item \texttt{notebooks/kaggle-submission.ipynb} — active implementation.
-\item \texttt{notebooks/solutions\_SeaFour.csv} — generated Kaggle-format output.
-\item \texttt{report/retrieval\_project\_report.pdf} — this report.
+\item \texttt{kaggle/kaggle\_submission.ipynb} — active implementation.
+\item \texttt{kaggle/solutions\_SeaFour.csv} — generated Kaggle-format output.
+\item \texttt{reports/retrieval\_project\_report.pdf} — this report.
 \end{itemize}
 
 \subsection{Repository Layout}
@@ -115,8 +112,8 @@ One Kaggle notebook contains all the logic needed to reproduce the submission fi
 \textbf{Path} & \textbf{Purpose} \\
 \midrule
 \texttt{data/}             & Competition files: documents, queries, ground-truth, and sample submission. \\
-\texttt{notebooks/}        & Active notebook and generated CSV. \\
-\texttt{report/}           & LaTeX source and compiled PDF. \\
+\texttt{kaggle/}        & Active notebook and generated CSV. \\
+\texttt{reports/}           & LaTeX source and compiled PDF. \\
 \texttt{requirements.txt}  & Python dependencies. \\
 \bottomrule
 \end{tabular}
@@ -133,7 +130,7 @@ One Kaggle notebook contains all the logic needed to reproduce the submission fi
 \node[box, fill=softblue]   (data)   at (0,0)     {Competition data\\docs + queries};
 \node[box, fill=softgreen]  (prep)   at (3.8,0)   {Preprocessing\\\texttt{content} field};
 \node[box, fill=softorange] (models) at (7.6,0)   {TF-IDF / BM25+\\Embedding / Hybrid};
-\node[box, fill=softrose]   (eval)   at (11.4,0)  {Evaluation\\MAP / Recall};
+\node[box, fill=softrose]   (eval)   at (11.4,0)  {Evaluation\\Prec / Recall / MRR / Acc};
 \node[box, fill=softgold]   (csv)    at (15.2,0)  {Kaggle CSV\\submission};
 
 \draw[->, thick] (data) -- (prep);
@@ -143,6 +140,34 @@ One Kaggle notebook contains all the logic needed to reproduce the submission fi
 \end{tikzpicture}
 }
 \end{center}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Improvement Journey}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+We iterated through several submission cycles. The scores below reflect the
+latest validated leaderboard results; pending variants are marked as TBD.
+
+\begin{center}
+\begin{tabular}{p{0.18\linewidth} p{0.60\linewidth} r}
+\toprule
+\textbf{Iteration} & \textbf{Main improvement} & \textbf{Score} \\
+\midrule
+Baseline & Initial lexical pipeline (TF-IDF / BM25+) with shared \texttt{content} field. & 0.16934 \\
+Embedding search & Added Sentence-Transformer retrieval for semantic matching. & 0.22592 \\
+Hybrid re-ranking & Lexical candidates re-ranked with embeddings + tuned candidate/Top-K. & \textit{TBD} \\
+Final system & Refined preprocessing, parameter tuning, and submission pipeline hardening. & \textit{TBD} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\studybox{Key Work Items}{%
+\begin{itemize}
+\item Normalised the text pipeline (lowercasing, separator handling, tag joining).
+\item Implemented and compared TF-IDF, BM25+, and embedding-based retrieval.
+\item Built the hybrid re-ranking path and tuned \texttt{TOP\_K} and candidate sizes.
+\item Hardened the Kaggle submission writer and local/Kaggle path detection.
+\end{itemize}}
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Dataset}
@@ -474,14 +499,11 @@ ground-truth relevance judgements (\texttt{qgts\_train.json}).
 
 \subsection{Metrics}
 
-\paragraph{Mean Average Precision (MAP@K).}
-For each query, Average Precision is computed over the top-$K$ retrieved
-documents:
+\paragraph{Precision@K.}
+The proportion of retrieved documents in the top-$K$ that are relevant:
 \[
-\text{AP}(q) = \frac{1}{|\mathcal{R}_q|}
-  \sum_{k=1}^{K} \text{Precision}(k) \cdot \mathbb{1}[d_k \in \mathcal{R}_q]
+\text{Precision@K}(q) = \frac{|\{d \in \text{top-}K\} \cap \mathcal{R}_q|}{K}
 \]
-MAP@K is the mean of AP values over all evaluated queries.
 
 \paragraph{Recall@K.}
 The fraction of relevant documents appearing in the top-$K$ results:
@@ -489,24 +511,38 @@ The fraction of relevant documents appearing in the top-$K$ results:
 \text{Recall@K}(q) = \frac{|\{d \in \text{top-}K\} \cap \mathcal{R}_q|}{|\mathcal{R}_q|}
 \]
 
+\paragraph{MRR@K.}
+The reciprocal rank of the first relevant document within the top-$K$:
+\[
+\text{MRR@K}(q) =
+\begin{cases}
+\frac{1}{r} & \text{if the first relevant document appears at rank } r \le K \\
+0 & \text{if no relevant document appears in the top-}K
+\end{cases}
+\]
+
+\paragraph{Accuracy.}
+Category prediction accuracy from the lightweight query classifier:
+\[
+\text{Accuracy} = \frac{\# \text{correct predictions}}{\# \text{queries}}
+\]
+
+The competition score averages Precision@K, Recall@K, MRR@K, and Accuracy.
+
 \subsection{Implementation}
 
 \begin{lstlisting}[language=Python]
-def mean_average_precision(results, ground_truth, k=100):
-    aps = []
+def precision_at_k(results, ground_truth, k=100):
+    precisions = []
     for item in results:
         qid = str(item['query_id'])
         if qid not in ground_truth:
             continue
         relevant = ground_truth[qid]
-        hits, score = 0, 0.0
-        for rank, doc_id in enumerate(
-                item['relevant_docs'][:k], 1):
-            if str(doc_id) in relevant:
-                hits += 1
-                score += hits / rank
-        aps.append(score / len(relevant) if relevant else 0.0)
-    return np.mean(aps) if aps else 0.0
+        retrieved = {str(d) for d in item['relevant_docs'][:k]}
+        hits = len(relevant & retrieved)
+        precisions.append(hits / k if k else 0.0)
+    return np.mean(precisions) if precisions else 0.0
 
 def recall_at_k(results, ground_truth, k=100):
     recalls = []
@@ -521,6 +557,25 @@ def recall_at_k(results, ground_truth, k=100):
             if relevant else 0.0
         )
     return np.mean(recalls) if recalls else 0.0
+
+def mrr_at_k(results, ground_truth, k=100):
+    mrrs = []
+    for item in results:
+        qid = str(item['query_id'])
+        if qid not in ground_truth:
+            continue
+        relevant = ground_truth[qid]
+        score = 0.0
+        for rank, doc_id in enumerate(item['relevant_docs'][:k], 1):
+            if str(doc_id) in relevant:
+                score = 1.0 / rank
+                break
+        mrrs.append(score)
+    return np.mean(mrrs) if mrrs else 0.0
+
+def category_accuracy(y_true, y_pred):
+    from sklearn.metrics import accuracy_score
+    return float(accuracy_score(y_true, y_pred))
 \end{lstlisting}
 
 \subsection{Results}
@@ -530,20 +585,21 @@ comparison table.  The results determine which model is used for the final
 test submission.
 
 \begin{center}
-\begin{tabular}{l c c}
+\begin{tabular}{l c c c c}
 \toprule
-\textbf{Model} & \textbf{MAP@100} & \textbf{Recall@100} \\
+\textbf{Model} & \textbf{Precision@100} & \textbf{Recall@100} & \textbf{MRR@100} & \textbf{Accuracy} \\
 \midrule
-TF-IDF     & \textit{(from notebook)} & \textit{(from notebook)} \\
-BM25+      & \textit{(from notebook)} & \textit{(from notebook)} \\
-Embedding  & \textit{(from notebook)} & \textit{(from notebook)} \\
-\textbf{Hybrid}  & \textit{(from notebook)} & \textit{(from notebook)} \\
+TF-IDF     & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
+BM25+      & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
+Embedding  & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
+\textbf{Hybrid}  & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} & \textit{(from notebook)} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \studybox{Note}{Fill in the actual metric values after running the evaluation
-cells in the notebook.  The \texttt{FINAL\_MODEL} parameter is then set to
+cells in the notebook.  The competition score averages Precision@K, Recall@K,
+MRR@K, and Accuracy, and the \texttt{FINAL\_MODEL} parameter is then set to
 the best-performing method.}
 
 % ═══════════════════════════════════════════════════════════════════════════════
@@ -561,7 +617,7 @@ test queries and writing the output in Kaggle format.
 \item \textbf{Preprocessing.}  Build the shared \texttt{content} column for
       documents and queries.
 \item \textbf{Evaluation.}  Run all four models on 327 training queries;
-      compute MAP@100 and Recall@100.
+      compute Precision@100, Recall@100, MRR@100, and Accuracy.
 \item \textbf{Model selection.}  Set \texttt{FINAL\_MODEL} to the
       best-performing method (configurable).
 \item \textbf{Test retrieval.}  Run the selected model on 141 test queries.
