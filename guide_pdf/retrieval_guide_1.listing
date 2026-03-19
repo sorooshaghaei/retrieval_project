@@ -1,0 +1,12 @@
+1. Load documents, train queries, test queries, qrels, and submission template.
+2. Validate schemas and ids.
+3. Normalize text consistently.
+4. Build document content and query content.
+5. Train the query category classifier (TF-IDF + LinearSVC).
+6. Build retrieval artifacts for TF-IDF, BM25+, and/or embeddings.
+7. Run retrieval for each query.
+8. Keep a large top_k candidate list to protect recall.
+9. Use top-20 category composition to choose a dominant category.
+10. Filter the candidate list by that dominant category.
+11. Evaluate on train queries.
+12. Run the final model on test queries and export CSV.
