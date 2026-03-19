@@ -1,0 +1,968 @@
+\documentclass[10pt]{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+  % No hard-coded system fonts here.
+  % This keeps XeLaTeX/LuaLaTeX portable across local installations.
+\fi
+
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,trees,decorations.pathreplacing}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{ragged2e}
+\usepackage[dvipsnames]{xcolor}
+
+% Spacing
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.16}
+\allowdisplaybreaks
+\setlist[itemize]{topsep=3pt,itemsep=3pt,leftmargin=1.5em}
+\setlist[enumerate]{topsep=3pt,itemsep=3pt,leftmargin=1.8em}
+
+% Color palette - intentionally different from the CNN guide
+\definecolor{DeepTeal}{RGB}{15,108,110}
+\definecolor{SoftTeal}{RGB}{228,244,244}
+\definecolor{DeepPlum}{RGB}{108,52,131}
+\definecolor{SoftPlum}{RGB}{241,233,246}
+\definecolor{DeepBrick}{RGB}{156,72,50}
+\definecolor{SoftBrick}{RGB}{249,237,231}
+\definecolor{DeepGold}{RGB}{156,117,24}
+\definecolor{SoftGold}{RGB}{250,245,228}
+\definecolor{SoftGray}{RGB}{247,248,250}
+\definecolor{TextGray}{RGB}{70,70,70}
+
+\colorlet{accent}{DeepTeal}
+\colorlet{accentdark}{DeepPlum}
+\colorlet{accentsoft}{SoftTeal}
+\colorlet{accentsofttwo}{SoftPlum}
+\colorlet{codeframe}{DeepTeal!25}
+\colorlet{codebg}{SoftGray}
+
+\lstdefinestyle{pythonstyle}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{DeepPlum}\bfseries,
+  commentstyle=\itshape\color{DeepTeal!70!black},
+  stringstyle=\color{DeepBrick!95!black},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  framerule=0.8pt,
+  rulecolor=\color{codeframe},
+  backgroundcolor=\color{codebg},
+  xleftmargin=0.7em,
+  xrightmargin=0.7em,
+  aboveskip=0.9em,
+  belowskip=0.9em,
+  columns=fullflexible,
+  keepspaces=true
+}
+\lstset{style=pythonstyle}
+
+\newtcblisting{asciibox}[1][]{
+  colback=codebg,colframe=codeframe,fonttitle=\bfseries,
+  listing only,breakable,#1,
+  coltitle=DeepPlum,
+  listing options={basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true}
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accentdark,
+  urlcolor=accent,
+  pdftitle={Retrieval Guide from Zero to 100},
+  pdfauthor={OpenAI},
+  pdfsubject={Self-study guide for the retrieval notebook},
+  pdfcreator={LaTeX}
+}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+% Box definitions
+\newcommand{\bookboxwidth}{\dimexpr\textwidth-2pt\relax}
+\newcommand{\booktitlewidth}{\dimexpr\bookboxwidth-2\booktitlexpadding\relax}
+\newcommand{\bookbodywidth}{\dimexpr\bookboxwidth-2\bookbodyxpadding\relax}
+\newcommand{\booktitlebarheight}{24pt}
+\newcommand{\booktitlexpadding}{10pt}
+\newcommand{\booktitleypadding}{0pt}
+\newcommand{\bookbodyxpadding}{8pt}
+\newcommand{\bookbodyypadding}{10pt}
+\newcommand{\booktitlebodygap}{12pt}
+\newcommand{\booktitlebarmotif}{}
+
+\newcommand{\booktitledbox}[4]{%
+\begin{center}
+\begin{tikzpicture}
+\node[
+draw=#1,
+fill=#2,
+rounded corners=6pt,
+line width=0.8pt,
+inner sep=0pt,
+outer sep=0pt,
+path picture={
+    \fill[#1]
+        ([yshift=-\booktitlebarheight]path picture bounding box.north west)
+        rectangle
+        (path picture bounding box.north east);
+    \booktitlebarmotif
+}
+] {%
+\begin{minipage}{\bookboxwidth}
+\vspace*{\booktitleypadding}
+\hspace*{\booktitlexpadding}\begin{minipage}[t]{\booktitlewidth}\RaggedRight
+\textcolor{white}{\textbf{\rule{0pt}{16pt}#3}}
+\end{minipage}\par
+\vspace{\booktitlebodygap}
+\hspace*{\bookbodyxpadding}\begin{minipage}[t]{\bookbodywidth}\justifying\noindent
+#4
+\end{minipage}\par\vspace{\bookbodyypadding}
+\end{minipage}};
+\end{tikzpicture}
+\end{center}
+}
+
+\newcommand{\workedbox}[2]{\booktitledbox{DeepTeal}{SoftTeal}{#1}{#2}}
+\newcommand{\warningbox}[1]{\booktitledbox{DeepBrick}{SoftBrick}{Warning}{#1}}
+\newcommand{\tipbox}[1]{\booktitledbox{DeepGold}{SoftGold}{Tip}{#1}}
+\newcommand{\purplebox}[2]{\booktitledbox{DeepPlum}{SoftPlum}{#1}{#2}}
+\newcommand{\notebox}[1]{\booktitledbox{DeepTeal}{SoftTeal}{Note}{#1}}
+
+\newtcbtheorem[]{termcard}{}{enhanced,attach boxed title to top left={yshift=-2mm,xshift=4mm},colback=white,colframe=DeepPlum,coltitle=white,boxed title style={colback=DeepPlum,colframe=DeepPlum},fonttitle=\small\bfseries,fontupper=\small,separator sign none,description delimiters parenthesis}{tc}
+
+% Header/Footer
+\setlength{\headheight}{34pt}
+\setlength{\footskip}{28pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\scriptsize\color{accent}\sffamily Retrieval Guide}
+\fancyhead[R]{\scriptsize\color{accentdark}\sffamily Zero to 100}
+\fancyfoot[C]{\small\color{accent!85!black}{\thepage}}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\footrulewidth}{0.6pt}
+\fancypagestyle{plain}{%
+\fancyhf{}
+\fancyhead[L]{\scriptsize\color{accent}\sffamily Retrieval Guide}
+\fancyhead[R]{\scriptsize\color{accentdark}\sffamily Zero to 100}
+\fancyfoot[C]{\small\color{accent!85!black}{\thepage}}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\footrulewidth}{0.6pt}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{1.3cm}
+{\Huge\bfseries Retrieval Engine Guide\\[0.35em]from Zero to 100\par}
+\vspace{0.45cm}
+{\large A readable study guide for the competition notebook and report\par}
+\vspace{0.6cm}
+
+\workedbox{Purpose}{
+This guide explains the retrieval project notebook from the ground up. It starts with the basic language of information retrieval, then moves to TF-IDF, BM25+, dense embeddings, category classification, dominant-category filtering, evaluation, and performance engineering. 
+}
+
+\purplebox{Be carefull }{
+Two common misconceptions should be corrected from the start.
+\begin{itemize}
+    \item \textbf{TF-IDF is not just repeated-word counting.} It weights within-document frequency by how rare the term is across the corpus.
+    \item \textbf{BM25+ is not mainly a tokenizer or stopword remover.} BM25+ is a probabilistic lexical ranking function with term-frequency saturation and document-length normalization. Tokenization and stopword removal are optional preprocessing choices, not the core formula.
+\end{itemize}
+}
+
+\begin{asciibox}[title={Guide map}]
+START
+  |
+  +--> Section 1: how to read the notebook as a system
+  |
+  +--> Section 2: retrieval basics from zero
+  |
+  +--> Section 3: preprocessing and text construction
+  |
+  +--> Section 4: TF-IDF in an academic but readable way
+  |
+  +--> Section 5: BM25+ and why it usually beats plain TF-IDF lexically
+  |
+  +--> Section 6: dense embeddings and semantic retrieval
+  |
+  +--> Section 7: classifier + dominant-category filter
+  |
+  +--> Section 8: evaluation metrics and score interpretation
+  |
+  +--> Section 9: caching, chunking, argpartition, and runtime design
+  |
+  `--> Appendix: formulas, oral-exam answers, and a tuning checklist
+\end{asciibox}
+
+\vfill
+{\large \today\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\section{How to use this guide}
+
+\workedbox{Suggested reading order}{
+Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, and \ref{sec:emb} in order. After that, read Sections~\ref{sec:clf}, \ref{sec:metrics}, and \ref{sec:eng}. That sequence matches the actual learning path: understand the retrieval task first, then the models, then the evaluation, then the engineering.
+}
+
+\begin{itemize}
+    \item \textbf{First pass:} Focus on vocabulary. Learn corpus, query, ranking, relevance, token, embedding, recall, precision, and MRR.
+    \item \textbf{Second pass:} Focus on formulas. Understand exactly what TF-IDF, BM25+, cosine similarity, and a linear SVM are doing.
+    \item \textbf{Third pass:} Focus on the notebook workflow. Connect each notebook block to the conceptual reason behind it.
+    \item \textbf{Final pass:} Focus on experimentation. Only then tune \code{top_k}, embedding batch size, or filtering strategy.
+\end{itemize}
+
+\notebox{
+This competition pipeline with TF-IDF and BM25+ baselines, a dense embedding retriever as the final active model, a TF-IDF + LinearSVC category classifier, and a dominant-category post-filter.
+}
+
+\section{The retrieval problem }
+\label{sec:basics}
+
+\subsection{What is information retrieval?}
+
+Information retrieval asks a simple question: given a query, which documents in a large collection should be ranked highest? In this project, the collection contains technical forum documents, and each query is a short technical problem statement. The system returns a ranked list of document identifiers.
+
+The central objects are:
+\[
+\mathcal{D} = \{d_1,d_2,\dots,d_N\} \quad \text{(documents)},
+\qquad
+\mathcal{Q} = \{q_1,q_2,\dots,q_M\} \quad \text{(queries)}.
+\]
+For one query \(q\), the retriever produces an ordering
+\[
+\pi_q = (d_{i_1}, d_{i_2}, \dots, d_{i_K}),
+\]
+where earlier positions are supposed to be more relevant.
+
+\subsection{What does ``relevant'' mean?}
+
+A document is relevant to a query if it helps answer that query according to the competition ground truth. Relevance is not identical to textual overlap. A relevant document can use different words from the query but still discuss the same underlying issue. This distinction is exactly why sparse lexical methods and dense semantic methods behave differently.
+
+\subsection{What is a ranking score?}
+
+A ranking function assigns a real number to each query-document pair:
+\[
+\mathrm{score}(q,d) \in \mathbb{R}.
+\]
+The system sorts documents by descending score. Different retrieval methods define this score differently:
+\begin{itemize}
+    \item TF-IDF usually uses cosine similarity between sparse vectors.
+    \item BM25+ uses a token-level lexical relevance formula.
+    \item Dense retrieval uses similarity between learned dense vectors.
+\end{itemize}
+
+\subsection{What is top-k?}
+
+\code{top_k} is the number of documents retained for each query after the first-stage retriever. Small \(K\) can miss relevant documents. Large \(K\) improves recall but usually hurts precision and increases compute and output size.
+
+\begin{asciibox}[title={One-query view of the pipeline}]
+query q
+  |
+  v
+[text normalization]
+  |
+  v
+[first-stage retriever]
+  |------------------------------|
+  | TF-IDF     BM25+   Embedding |
+  |------------------------------|
+  |
+  v
+ranked list of top_k documents
+  |
+  v
+optional category-based filtering
+  |
+  v
+final ranked submission / offline evaluation
+\end{asciibox}
+
+\subsection{Why lexical and semantic retrieval differ}
+
+Lexical retrieval is driven by token overlap. It is strong when exact words matter, such as error messages, API names, product names, flags, and codes. Semantic retrieval tries to map different phrasings with similar meaning to nearby vectors. It is stronger when the query paraphrases the document instead of repeating the same words.
+
+\warningbox{
+A query and a relevant document can talk about the same issue while sharing few exact words. That failure mode is often called \textbf{vocabulary mismatch} or \textbf{semantic mismatch}. This is the main reason embedding retrieval became the final active method in the notebook.
+}
+
+\section{Dataset, text construction, and preprocessing}
+\label{sec:pre}
+
+\subsection{Dataset objects in the notebook}
+
+The project materials describe a collection of 216{,}041 documents, 327 training queries, 141 test queries, and a training relevance file. Documents belong to five categories: \code{tex}, \code{unix}, \code{gaming}, \code{programmers}, and \code{android}. That category signal later becomes useful for classification and filtering.
+
+\subsection{Why strict schema checks matter}
+
+The notebook performs early validation of columns and identifier uniqueness. This is not cosmetic. Retrieval systems break quietly when ids are duplicated, when expected fields are missing, or when train and test schemas differ slightly.
+
+Conceptually, early validation prevents these classes of bugs:
+\begin{itemize}
+    \item a document missing its text field,
+    \item duplicate ids that later corrupt ranking output,
+    \item category labels absent during classifier training,
+    \item broken merges between results and relevance judgments.
+\end{itemize}
+
+\subsection{How text is constructed}
+
+The notebook builds retrieval documents from
+\[
+\texttt{title + text + tags},
+\]
+while retrieval queries use
+\[
+\texttt{title + text}.
+\]
+For the classifier, the notebook can use query tags as well. This distinction matters because the retriever and classifier are not solving exactly the same subproblem.
+
+\purplebox{Why combine multiple fields?}{
+A forum post title is often concise and highly informative, the body provides detailed context, and tags provide compact topical labels. Merging them can increase retrieval signal. But you should merge them consistently across train and test to keep the feature space stable.
+}
+
+\subsection{Normalization policy}
+
+The notebook uses light, shared normalization instead of aggressive linguistic processing. In simplified form, the policy is:
+\begin{enumerate}
+    \item replace separators \code{-}, \code{\_}, and \code{/} with spaces,
+    \item lowercase the text,
+    \item collapse repeated whitespace,
+    \item strip leading and trailing space.
+\end{enumerate}
+
+This produces consistent text while preserving most lexical information.
+
+\begin{lstlisting}[caption={Conceptual normalization logic}]
+def normalize_text(text):
+    text = replace_separators(text, chars='-_/')
+    text = text.lower()
+    text = collapse_whitespace(text)
+    return text.strip()
+\end{lstlisting}
+
+\subsection{Tokenization in this notebook}
+
+The lexical token pattern is
+\[
+\texttt{[a-z0-9]+}.
+\]
+That means tokens are sequences of lowercase letters and digits. So numbers are not automatically removed; they are kept whenever they match the pattern.
+
+\warningbox{
+This notebook does \textbf{not} implement classical stopword removal as a core preprocessing step. Therefore words such as \code{the} or \code{is} are not removed just because BM25+ is used. They may receive low discriminative weight, but they are still tokens unless you explicitly filter them.
+}
+
+\subsection{Why use shared preprocessing across all retrievers?}
+
+If TF-IDF, BM25+, and embeddings receive differently normalized text, comparison becomes noisy. You no longer know whether a performance change came from the model or from preprocessing differences. Shared normalization is therefore an experimental control.
+
+\section{TF-IDF from zero}
+\label{sec:tfidf}
+
+\subsection{The bag-of-words idea}
+
+TF-IDF starts from a sparse representation. Imagine a vocabulary
+\[
+V = \{t_1,t_2,\dots,t_{|V|}\}.
+\]
+Each document becomes a vector of size \(|V|\). Most entries are zero because each document only uses a small subset of all possible words. This is why TF-IDF is called a \textbf{sparse} representation.
+
+\subsection{Term frequency}
+
+For a term \(t\) and document \(d\), term frequency \(\mathrm{tf}(t,d)\) measures how often \(t\) appears in \(d\). A larger count usually suggests the term is more central to that document.
+
+But raw repetition alone is not enough. If a word occurs in almost every document, it is not very helpful for distinguishing relevant from irrelevant documents.
+
+\subsection{Inverse document frequency}
+
+Let \(N\) be the total number of documents and \(\mathrm{df}(t)\) the number of documents containing term \(t\). Inverse document frequency reduces the importance of overly common terms and boosts rarer terms. A standard form is:
+\[
+\mathrm{idf}(t) = \log\left(\frac{N}{\mathrm{df}(t)}\right).
+\]
+Different libraries use smoothed variants, but the intuition is always the same: rare terms carry more discriminative information.
+
+\subsection{Putting TF and IDF together}
+
+A simple TF-IDF weight is
+\[
+\mathrm{tfidf}(t,d) = \mathrm{tf}(t,d) \cdot \mathrm{idf}(t).
+\]
+So TF-IDF is not merely counting repeated words. It answers a more refined question:
+\begin{quote}
+Is this term frequent in this document \emph{and} relatively rare in the corpus?
+\end{quote}
+
+\subsection{Query and document vectors}
+
+The query is also turned into a TF-IDF vector. Then the model computes similarity between the sparse query vector and each sparse document vector.
+
+The most common similarity is cosine similarity:
+\[
+\cos(\theta) = \frac{\vect{q}\cdot\vect{d}}{\|\vect{q}\|\,\|\vect{d}\|}.
+\]
+This measures angle rather than raw length, which makes the comparison more stable when queries and documents have different sizes.
+
+\begin{asciibox}[title={TF-IDF intuition}]
+rare term in query + rare term in document  --> strong signal
+common term in query + common term in document --> weak signal
+no exact overlap --> almost no lexical signal
+\end{asciibox}
+
+\subsection{Why the notebook uses unigrams and bigrams}
+
+The notebook uses \code{ngram_range=(1,2)}. That means it includes:
+\begin{itemize}
+    \item unigrams: single tokens such as \code{kernel}
+    \item bigrams: adjacent token pairs such as \code{kernel panic}
+\end{itemize}
+Bigrams help preserve short phrases and can improve lexical specificity.
+
+The notebook also uses \code{min_df=2}, meaning terms that appear in only one document are pruned. This reduces very rare noise, though the vectorizer can fall back to \code{min_df=1} if pruning removes everything in an edge case.
+
+\subsection{Strengths of TF-IDF}
+
+\begin{itemize}
+    \item simple and fast,
+    \item easy to inspect,
+    \item strong on exact technical terms,
+    \item good as a baseline and debugging instrument.
+\end{itemize}
+
+\subsection{Weaknesses of TF-IDF}
+
+\begin{itemize}
+    \item weak on paraphrases,
+    \item weak when query and document use synonyms,
+    \item less robust when documents are very long and heterogeneous,
+    \item still largely dependent on direct overlap.
+\end{itemize}
+
+\tipbox{
+In oral or written explanation, a clean sentence is: ``TF-IDF is a sparse lexical weighting scheme that emphasizes terms that are frequent within a document but rare across the collection, and it is typically paired with cosine similarity for ranking.''
+}
+
+\section{BM25+ from zero}
+\label{sec:bm25}
+
+\subsection{Why BM25 exists if we already have TF-IDF}
+
+TF-IDF is a good baseline, but it does not model two practical effects very elegantly:
+\begin{enumerate}
+    \item repeated occurrences of a term should help, but with diminishing returns,
+    \item long documents should not win only because they contain more words.
+\end{enumerate}
+BM25 was designed to address these issues more directly.
+
+\subsection{The core BM25 idea}
+
+For each query term \(t\), BM25 computes a contribution to the score of document \(d\). A standard BM25+ form is
+\[
+\mathrm{score}(q,d) = \sum_{t\in q} \mathrm{idf}(t)
+\left(
+\frac{f(t,d)(k_1+1)}{f(t,d)+k_1\left(1-b+b\frac{|d|}{\mathrm{avgdl}}\right)} + \delta
+\right),
+\]
+where:
+\begin{itemize}
+    \item \(f(t,d)\) is the frequency of term \(t\) in document \(d\),
+    \item \(|d|\) is document length,
+    \item \(\mathrm{avgdl}\) is average document length in the corpus,
+    \item \(k_1\) controls term-frequency saturation,
+    \item \(b\) controls document-length normalization,
+    \item \(\delta\) is the BM25+ offset.
+\end{itemize}
+
+\subsection{Term-frequency saturation}
+
+BM25 does not reward repeated terms linearly forever. The first few appearances matter more than the fiftieth. This is called \textbf{term-frequency saturation}. It reflects the intuition that after a point, additional repetitions add less new evidence.
+
+\subsection{Length normalization}
+
+If two documents mention the same important term equally well, a much longer document should not automatically be preferred just because it contains more total words. The \(b\) parameter adjusts for this by comparing document length to average document length.
+
+\subsection{What BM25+ adds}
+
+BM25+ adds the \(\delta\) term so that long documents are not overly penalized when they do contain a query term. It is a refinement of BM25, especially helpful in some long-document settings.
+
+\subsection{How to interpret the notebook parameters}
+
+The notebook uses:
+\[
+ k_1 = 1.5, \qquad b = 0.75, \qquad \delta = 1.0.
+\]
+These are reasonable, standard-looking defaults:
+\begin{itemize}
+    \item \(k_1=1.5\): moderate saturation,
+    \item \(b=0.75\): substantial but not extreme length normalization,
+    \item \(\delta=1.0\): positive BM25+ adjustment.
+\end{itemize}
+
+\subsection{Correcting the stopword misconception}
+
+Your intuition that BM25 cares about common words is directionally related to reality, but the mechanism is different from ``BM25 removes the, a, is''.
+
+The correct explanation is:
+\begin{itemize}
+    \item BM25 is still a lexical matching model based on tokens.
+    \item Common terms often receive lower \(\mathrm{idf}\), so they contribute less to ranking.
+    \item Tokenization and stopword removal happen \emph{before} scoring if the pipeline designer chooses them.
+    \item In this notebook, the tokenizer keeps lowercase alphanumeric tokens, including numbers, and there is no dedicated stopword-removal stage in the shared preprocessing.
+\end{itemize}
+
+\subsection{Why BM25+ can beat TF-IDF lexically}
+
+On long and uneven documents, BM25+ often gives more realistic lexical scores because it combines term rarity, saturation, and length normalization in a more retrieval-specific way than plain TF-IDF cosine similarity.
+
+\begin{asciibox}[title={BM25+ intuition in one line}]
+TF-IDF asks: which rare terms overlap?
+BM25+ asks: which rare terms overlap, with sensible diminishing returns and document-length correction?
+\end{asciibox}
+
+\subsection{What BM25+ still cannot solve}
+
+BM25+ is still lexical. If a relevant document says \code{application freezes} and the query says \code{program hangs}, BM25+ may still miss the connection if the shared token overlap is weak.
+
+\section{Dense embeddings and semantic retrieval}
+\label{sec:emb}
+
+\subsection{Why move from sparse to dense representations?}
+
+Sparse vectors have one dimension per vocabulary item. Dense vectors instead have a fixed low dimension and are learned so that semantically similar texts land close to one another in vector space.
+
+In the project notebook, the active dense model is \code{all-MiniLM-L6-v2}. The report describes document and query vectors of dimension 384.
+
+\subsection{What an embedding is}
+
+An embedding is a dense vector representation:
+\[
+\vect{e}(x) \in \mathbb{R}^{384}.
+\]
+The important idea is not the exact dimension; it is that semantic information is distributed across the vector coordinates.
+
+\subsection{How dense retrieval works}
+
+The notebook encodes every document into a dense vector and stores the resulting matrix. Each query is also encoded into a dense vector. Then the retriever computes similarity between the query vector and all document vectors.
+
+If vectors are L2-normalized, cosine similarity and dot product become equivalent up to scale:
+\[
+\cos(\theta) = \vect{e}(q)^\top \vect{e}(d)
+\quad \text{when both vectors have unit norm.}
+\]
+
+\subsection{Why dense retrieval helps here}
+
+Dense retrieval is especially strong when:
+\begin{itemize}
+    \item the query paraphrases the relevant document,
+    \item the same issue is described with different wording,
+    \item abbreviations and alternate phrasing appear,
+    \item exact lexical overlap is sparse.
+\end{itemize}
+
+\purplebox{Semantic shift}{
+The notebook moves from lexical matching to semantic matching. Instead of asking only ``which tokens overlap?'', the dense model asks ``which texts are close in learned meaning space?''.
+}
+
+\subsection{Why embeddings are expensive}
+
+Dense retrieval usually improves recall, but it introduces computational cost:
+\begin{itemize}
+    \item encoding all documents is expensive,
+    \item storing the embedding matrix takes memory,
+    \item scoring query vectors against all document vectors can be slow.
+\end{itemize}
+This is why the notebook invests heavily in caching and chunked scoring.
+
+\subsection{Batching and chunking}
+
+The notebook uses an embedding batch size for encoding and a query chunk size for scoring. These are engineering controls, not retrieval theory. They do not change the mathematical objective; they change runtime and memory behavior.
+
+If you score all queries against all documents at once, you may create a huge dense score matrix. Chunking processes manageable query groups instead.
+
+\subsection{What dense retrieval does not magically solve}
+
+Dense retrieval is not perfect.
+\begin{itemize}
+    \item It can be slower.
+    \item It can require more memory.
+    \item It can produce semantically plausible but category-wrong documents.
+    \item It may need post-filtering or reranking for best precision.
+\end{itemize}
+
+\warningbox{
+Dense retrieval is usually a recall tool first. In many systems, it brings more relevant candidates into the top-\(K\), but later stages are still needed to clean noise.
+}
+
+\section{The category classifier and dominant-category filter}
+\label{sec:clf}
+
+\subsection{Why add a classifier to a retriever?}
+
+The retriever finds documents that look relevant. The classifier predicts which topical category a query belongs to. These are related but not identical tasks.
+
+In this notebook, the category classifier is trained with TF-IDF features and a linear support vector machine:
+\begin{itemize}
+    \item features: TF-IDF vectors,
+    \item classifier: \code{LinearSVC},
+    \item label: one category per example.
+\end{itemize}
+
+\subsection{What a linear SVM is doing here}
+
+A linear SVM learns a separating hyperplane between classes in feature space. With a one-vs-rest or multiclass scheme, it can predict one category for each query from its TF-IDF representation.
+
+A clean academic description is:
+\begin{quote}
+The classifier is a linear discriminative model over sparse TF-IDF features, trained to predict the most likely forum category of each query.
+\end{quote}
+
+\subsection{Why this can improve the pipeline}
+
+Suppose dense retrieval returns mostly good documents but also mixes in some documents from semantically nearby yet wrong categories. If the query is really \code{android} and many deep-ranked documents drift into \code{programmers}, a category filter can remove part of that noise.
+
+\subsection{The notebook's dominant-category filter}
+
+The notebook does something specific and clever:
+\begin{enumerate}
+    \item take the top \(N\) retrieved documents for one query, with \(N=20\),
+    \item count the categories in that top window,
+    \item find the dominant category,
+    \item keep only documents from that category in the final ranked list.
+\end{enumerate}
+
+So the top retrieved documents vote for a category, and the rest of the ranked list is filtered accordingly.
+
+\begin{asciibox}[title={Dominant-category filter}]
+Top 20 retrieved docs for one query
+  |
+  +--> android: 11
+  +--> programmers: 5
+  +--> unix: 4
+  |
+  `--> dominant category = android
+
+Keep only documents labeled android in the final list.
+\end{asciibox}
+
+\subsection{Why this helps}
+
+It can clean the long tail of a large \code{top_k} ranking. If the first-stage retriever returns 7,500 documents, later positions inevitably contain noise. A dominant-category filter removes some of that noise while preserving the general ranking order inside the chosen category.
+
+\subsection{What the risk is}
+
+If the dominant category is wrong for a query, the filter can remove relevant documents from the correct category. So the filter trades off robustness against category drift with the risk of category over-commitment.
+
+\tipbox{
+You can describe the post-filter as a \textbf{high-precision biasing step}: it assumes that the category distribution of the top window is informative enough to prune later noise.
+}
+
+\section{Evaluation metrics and how to read them}
+\label{sec:metrics}
+
+\subsection{Recall@K}
+
+Recall asks: among all truly relevant documents, how many did we recover?
+\[
+\mathrm{Recall@K} = \frac{|R_q \cap \hat{R}_{q,K}|}{|R_q|},
+\]
+where \(R_q\) is the set of truly relevant documents and \(\hat{R}_{q,K}\) is the predicted top-\(K\) set.
+
+High recall means the system is good at not missing relevant material.
+
+\subsection{Precision@K}
+
+Precision asks: among the documents we returned, how many are truly relevant?
+\[
+\mathrm{Precision@K} = \frac{|R_q \cap \hat{R}_{q,K}|}{|\hat{R}_{q,K}|}.
+\]
+If \(K\) is very large, precision often becomes small, because the denominator grows quickly.
+
+\subsection{MRR@K}
+
+Mean Reciprocal Rank focuses on the first relevant hit. For one query, if the first relevant document appears at rank \(r_q\), then the reciprocal rank is
+\[
+\frac{1}{r_q}.
+\]
+Averaging across queries gives MRR. High MRR means useful documents appear early.
+
+\subsection{Accuracy}
+
+In this project, accuracy refers to the category classifier. It asks how often the predicted category matches the true category.
+
+\subsection{The combined score}
+
+The report averages four quantities:
+\[
+\mathrm{Score} = \frac{1}{4}(\mathrm{Recall} + \mathrm{Precision} + \mathrm{MRR} + \mathrm{Accuracy}).
+\]
+This means the system is not evaluated only as a retriever; it is evaluated as a retrieval-plus-category pipeline.
+
+\subsection{How to interpret a very low precision with high recall}
+
+Because the active configuration uses a huge initial \(K=7500\), precision is expected to be numerically small. That does not automatically mean the system is poor. It may simply reflect the fact that you intentionally retained a large candidate set to protect recall.
+
+The more meaningful interpretation is joint:
+\begin{itemize}
+    \item high recall says relevant documents are usually present,
+    \item reasonable MRR says useful documents appear early,
+    \item classifier accuracy and filtering help control category noise,
+    \item very low precision is partly a mathematical consequence of a large output list.
+\end{itemize}
+
+\section{Performance engineering: why the notebook does not stop at theory}
+\label{sec:eng}
+
+\subsection{Why engineering matters here}
+
+A theoretically good retriever is not enough if every iteration takes too long. The report notes that the embedding pipeline initially approached a severe runtime bottleneck, so the notebook adds several engineering optimizations.
+
+\subsection{Disk caching}
+
+Dense document embeddings are expensive to recompute. The notebook fingerprints relevant dataframes and configuration, then saves reusable artifacts such as embedding matrices and classical indexes to disk.
+
+This is important because the expensive step is often document encoding, not query encoding. Once document embeddings are cached, repeated runs become dramatically cheaper.
+
+\subsection{In-memory caching}
+
+The notebook also keeps objects in memory dictionaries during a live session. This avoids unnecessary repeated loads from disk after the first use.
+
+\subsection{Chunked query scoring}
+
+Instead of scoring all queries against all documents in one giant matrix multiplication, the notebook scores query chunks, for example 32 at a time. This controls peak memory usage.
+
+\subsection{Partial sorting with \code{np.argpartition}}
+
+A full sort of all document scores for every query is expensive when you only need the best \(K\) items. \code{np.argpartition} is a partial-selection method. It finds the top part more cheaply than a full exact sort of the entire array. You can then sort only that smaller candidate slice.
+
+\begin{asciibox}[title={Why partial sorting is faster}]
+Need top 7,500 docs out of 216,041?
+
+Full sort:
+  sort all 216,041 scores
+
+Partial selection:
+  find only the best 7,500 region first
+  then sort that region
+\end{asciibox}
+
+\subsection{Reusing one max-K ranking}
+
+During offline sweeps, if you compute a correct sorted top-7,500 ranking, then top-100, top-500, or top-1,000 prefixes can be obtained by truncation. The notebook reuses that fact instead of recomputing rankings for every smaller \(K\).
+
+\subsection{The engineering lesson}
+
+The notebook is not only a modeling notebook. It is an engineering report. Its final quality comes from both retrieval choices and systems design.
+
+\section{Notebook-aligned walkthrough}
+\label{sec:walk}
+
+\subsection{How the notebook is organized}
+
+The saved notebook is organized in a clean progression:
+\begin{enumerate}
+    \item project overview,
+    \item explanation of why embeddings are the default,
+    \item \code{top_k} discussion,
+    \item method comparison,
+    \item imports and configuration,
+    \item data loading,
+    \item preprocessing,
+    \item index construction and caching,
+    \item retrieval functions,
+    \item evaluation logic,
+    \item experiment loop,
+    \item test submission generation,
+    \item conclusion.
+\end{enumerate}
+
+\subsection{What each code region is conceptually doing}
+
+\begin{longtable}{@{}p{0.18\textwidth}p{0.76\textwidth}@{}}
+\toprule
+\textbf{Notebook region} & \textbf{Conceptual role} \\
+\midrule
+Imports and config & Defines global settings: active model, \code{top_k}, tokenizer pattern, TF-IDF parameters, BM25+ parameters, embedding model name, cache directories. \\
+Data loading & Reads raw JSON files, validates required columns, checks ids, and enforces reproducibility assumptions. \\
+Preprocessing & Normalizes text and builds unified \code{content} fields for documents and queries. \\
+Index construction & Fits TF-IDF, builds BM25+, loads the sentence-transformer, and prepares or loads cached embeddings. \\
+Retrieval functions & Converts one method choice into a ranked list of documents for each query. \\
+Evaluation logic & Computes Recall, Precision, MRR, Accuracy, and their average score. \\
+Experiment loop & Runs the selected models, applies the dominant-category filter, and collects summary tables. \\
+Submission generation & Runs the final model on the test queries and writes the output CSV. \\
+\bottomrule
+\end{longtable}
+
+\subsection{What is ``active'' and what is ``implemented''}
+
+A crucial distinction in the project report is this:
+\begin{itemize}
+    \item TF-IDF retrieval is implemented, but not the final active submission method.
+    \item BM25+ retrieval is implemented, but not the final active submission method.
+    \item Embedding retrieval is both implemented and active.
+    \item The category classifier and dominant-category filter are active support components.
+\end{itemize}
+
+That is an academically strong experimental structure: keep simpler baselines for comparison, but submit the method that actually wins on the observed task.
+
+\section{A complete mental model of the full pipeline}
+\label{sec:mental}
+
+\begin{asciibox}[title={End-to-end mental model}]
+1. Load documents, train queries, test queries, qrels, and submission template.
+2. Validate schemas and ids.
+3. Normalize text consistently.
+4. Build document content and query content.
+5. Train the query category classifier (TF-IDF + LinearSVC).
+6. Build retrieval artifacts for TF-IDF, BM25+, and/or embeddings.
+7. Run retrieval for each query.
+8. Keep a large top_k candidate list to protect recall.
+9. Use top-20 category composition to choose a dominant category.
+10. Filter the candidate list by that dominant category.
+11. Evaluate on train queries.
+12. Run the final model on test queries and export CSV.
+\end{asciibox}
+
+\purplebox{One-sentence summary}{
+The final system is a dense semantic first-stage retriever, supported by a sparse linear category classifier and a dominant-category filter, all wrapped in a cache-aware evaluation and submission pipeline.
+}
+
+\section{Common misunderstandings corrected}
+\label{sec:mis}
+
+\begin{termcard*}{Misunderstanding 1}
+\textbf{``TF-IDF finds repeated words.''}\\
+Only partly. It weights within-document frequency by inverse document frequency across the corpus. Repetition matters, but rarity matters too.
+\end{termcard*}
+
+\begin{termcard*}{Misunderstanding 2}
+\textbf{``BM25 removes stopwords.''}\\
+Not inherently. BM25 is a ranking formula. Stopword removal is a preprocessing design choice. In this notebook, there is no dedicated stopword-removal step in the shared normalization pipeline.
+\end{termcard*}
+
+\begin{termcard*}{Misunderstanding 3}
+\textbf{``Embeddings are just another kind of token count.''}\\
+No. Dense embeddings are learned vector representations intended to capture semantic proximity, including paraphrase-level similarity.
+\end{termcard*}
+
+\begin{termcard*}{Misunderstanding 4}
+\textbf{``Low precision means the system failed.''}\\
+Not necessarily. With very large \(K\), precision can be numerically tiny while recall and MRR remain strong. Metric interpretation depends on task design.
+\end{termcard*}
+
+\section{How to explain this project academically in class or in a report}
+
+\subsection{Short version}
+
+``We implemented three first-stage retrievers: TF-IDF, BM25+, and dense embeddings. TF-IDF and BM25+ serve as sparse lexical baselines, while the final active system uses a sentence-transformer embedding retriever because it better addresses vocabulary mismatch. We then combine retrieval with a TF-IDF + LinearSVC category classifier and a dominant-category post-filter to clean the long tail of a large top-\(K\) ranking. The pipeline is optimized with artifact caching, chunked query scoring, and partial top-\(K\) selection.''
+
+\subsection{Longer version}
+
+``The project begins with strict schema validation and shared normalization to make model comparisons trustworthy. Documents are represented as title + body + tags, while queries use title + body for retrieval and can include tags for category prediction. TF-IDF provides a sparse cosine baseline, BM25+ provides a stronger lexical baseline with term-frequency saturation and document-length normalization, and dense embeddings provide a semantic retriever robust to paraphrase. Because dense retrieval is computationally expensive, the notebook caches document embeddings and scores queries in chunks. After retrieval, a lightweight linear category classifier predicts topical structure, and a dominant-category filter uses the top retrieved window to suppress cross-category noise before evaluation and submission generation.''
+
+\section{A practical tuning checklist}
+
+\begin{enumerate}
+    \item Verify data loading and ids before changing models.
+    \item Keep normalization shared across methods.
+    \item Establish TF-IDF as the sanity-check baseline.
+    \item Compare BM25+ against TF-IDF to isolate lexical improvements.
+    \item Move to embeddings when semantic mismatch is the main failure mode.
+    \item Cache document embeddings immediately.
+    \item Tune \code{top_k} for recall first, precision second.
+    \item Inspect whether category filtering removes useful documents or only noise.
+    \item Report Recall, Precision, MRR, and Accuracy together rather than in isolation.
+    \item Reuse max-\(K\) results for smaller \(K\) sweeps when possible.
+\end{enumerate}
+
+\appendix
+
+\section{Formula sheet}
+
+\subsection*{TF-IDF}
+\[
+\mathrm{tfidf}(t,d)=\mathrm{tf}(t,d)\cdot \mathrm{idf}(t)
+\]
+\[
+\mathrm{idf}(t)=\log\left(\frac{N}{\mathrm{df}(t)}\right)
+\]
+
+\subsection*{Cosine similarity}
+\[
+\cos(\theta)=\frac{\vect{q}\cdot\vect{d}}{\|\vect{q}\|\,\|\vect{d}\|}
+\]
+
+\subsection*{BM25+}
+\[
+\mathrm{score}(q,d) = \sum_{t\in q} \mathrm{idf}(t)
+\left(
+\frac{f(t,d)(k_1+1)}{f(t,d)+k_1\left(1-b+b\frac{|d|}{\mathrm{avgdl}}\right)} + \delta
+\right)
+\]
+
+\subsection*{Recall@K}
+\[
+\mathrm{Recall@K}=\frac{|R_q\cap\hat{R}_{q,K}|}{|R_q|}
+\]
+
+\subsection*{Precision@K}
+\[
+\mathrm{Precision@K}=\frac{|R_q\cap\hat{R}_{q,K}|}{|\hat{R}_{q,K}|}
+\]
+
+\subsection*{MRR}
+\[
+\mathrm{MRR}=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{r_q}
+\]
+
+\subsection*{Combined score}
+\[
+\mathrm{Score} = \frac{1}{4}(\mathrm{Recall}+\mathrm{Precision}+\mathrm{MRR}+\mathrm{Accuracy})
+\]
+
+\section{Ten oral-exam questions with model answers}
+
+\begin{enumerate}
+    \item \textbf{Why is TF-IDF sparse?} Because each vector has one dimension per vocabulary item, and most terms are absent from a given document.
+    \item \textbf{Why is BM25+ usually better than raw TF-IDF for lexical retrieval?} Because it includes term-frequency saturation and document-length normalization, which better reflect retrieval behavior on uneven documents.
+    \item \textbf{Why are embeddings useful here?} Because relevant technical documents may use different wording from the query, and dense embeddings are more robust to paraphrase.
+    \item \textbf{Why not submit TF-IDF if it is simpler?} Because a simple baseline is valuable for comparison, but the final choice should follow empirical performance on the task.
+    \item \textbf{Why use a category classifier?} To estimate the topical region of the query and reduce cross-category noise in deep rankings.
+    \item \textbf{What does the dominant-category filter assume?} It assumes the category composition of the top retrieval window is informative enough to guide pruning of later results.
+    \item \textbf{Why is precision small when \(K\) is large?} Because the denominator includes many returned documents; even strong recall can coexist with low precision at large \(K\).
+    \item \textbf{Why cache embeddings?} Because document encoding is expensive and does not need to be repeated every run.
+    \item \textbf{Why use query chunking?} To control memory usage during dense scoring.
+    \item \textbf{Why use partial sorting?} Because you only need the top part of the ranking, not a full exact sort of all scores.
+\end{enumerate}
+
+\section{Final takeaway}
+
+\workedbox{What you should remember most}{
+This project is not just ``TF-IDF versus BM25 versus embeddings.'' It is a full retrieval system. The final notebook combines semantic first-stage retrieval, sparse linear category prediction, category-aware post-filtering, and strong runtime engineering. The best way to describe it academically is: \emph{a cache-aware hybrid retrieval pipeline with dense semantic ranking and lightweight categorical control}.}
+
+\end{document}
