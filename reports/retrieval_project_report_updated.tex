@@ -1,0 +1,231 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1.85cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{tikz}
+
+\usetikzlibrary{arrows.meta, positioning, calc}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  urlcolor=teal!50!black,
+  pdftitle={Retrieval Engine Competition Project - Notebook-Aligned Report},
+  pdfauthor={Maksym DOLHOV; Mehdi AGHAEI; Nguyen Ho Bao KHANH},
+  pdfsubject={SeaFour notebook-aligned retrieval report}
+}
+
+\definecolor{ink}{HTML}{233648}
+\definecolor{accent}{HTML}{2A6F97}
+\definecolor{softblue}{HTML}{EAF3FA}
+\definecolor{softgreen}{HTML}{E9F5EE}
+\definecolor{softgold}{HTML}{F7F1D8}
+\definecolor{softgray}{HTML}{F4F6F8}
+\definecolor{rulegray}{HTML}{D6DCE3}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5.5pt}
+\renewcommand{\arraystretch}{1.18}
+\setlist[itemize]{leftmargin=1.4em, itemsep=2pt, topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em, itemsep=2pt, topsep=3pt}
+
+\lstdefinestyle{codeblock}{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framesep=4pt,
+  framerule=0.4pt,
+  rulecolor=\color{rulegray},
+  backgroundcolor=\color{softgray}
+}
+\lstset{style=codeblock}
+
+\newcommand{\metric}[1]{\textbf{#1}}
+\newcommand{\smallcaps}[1]{\textsc{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{1.0cm}
+
+{\Large\bfseries Retrieval Engine Competition Project\par}
+\vspace{0.2cm}
+{\large Notebook Report\par}
+\vspace{0.6cm}
+{\large Group: SeaFour\par}
+\vspace{0.9cm}
+
+\begin{tabular}{c}
+Maksym DOLHOV \\
+Mehdi AGHAEI \\
+Nguyen Ho Bao KHANH \\
+\end{tabular}
+
+\vspace{1.0cm}
+
+\begin{tikzpicture}[x=1cm,y=1cm,>=Latex]
+  \node[draw=ink, rounded corners=5pt, fill=softblue, text width=13.7cm, minimum height=4.0cm, align=left, inner sep=10pt] (box) at (0,0) {
+  \textbf{Report objective.} This version updates the written report to precisely match our experimental progression and the current saved notebook. We detail our journey from TF-IDF and BM25+ baselines to a robust dense embedding retriever. The active configuration evaluates and submits only the embedding retriever, combined with a TF-IDF + LinearSVC category classifier and a dominant-category post-filter.\\[0.25cm]
+  \textbf{Primary source files.} \texttt{kaggle-submission.ipynb}, \texttt{solutions\_SeaFour.csv}, and this \LaTeX\ report.};
+\end{tikzpicture}
+
+\vspace{0.8cm}
+
+\begin{tabular}{>{\bfseries}p{0.27\linewidth}p{0.60\linewidth}}
+Notebook file & \texttt{kaggle-submission.ipynb} \\
+Submission file & \texttt{solutions\_SeaFour.csv} \\
+Current default model & \texttt{embedding} \\
+Submission size target & Top 7,500 retrieved documents before category filtering \\
+Date & \today \\
+\end{tabular}
+
+\vfill
+\end{titlepage}
+
+\section{Notebook-Aligned System Overview}
+
+The logic is organized into several stages: strict data loading, shared text normalization, sequential model experimentation (TF-IDF to BM25+ to Embeddings), aggressive caching for performance, offline evaluation, and submission generation.
+
+The current system relies entirely on a highly optimized dense first-stage retriever paired with a dominant-category filter.
+
+\begin{figure}[H]
+\centering
+\resizebox{1.0\linewidth}{!}{%
+\begin{tikzpicture}[
+  box/.style={draw=ink, rounded corners=3pt, minimum width=1cm, minimum height=2cm, align=center, thick},
+  >={Latex[length=2.0mm]}
+]
+\node[box, fill=softblue]   (data)   at (-5,5)    {Load JSON files\\schema checks};
+\node[box, fill=softgreen]  (prep)   at (-0.5,4) {Normalize text\\build \texttt{content}};
+\node[box, fill=softgold]   (index)  at (5.0,3) {Cache artifacts\\TF-IDF / BM25+ / embeddings};
+\node[box, fill=softblue]   (retr)   at (10.0,2){Run retriever\\top-$k$ ranking};
+\node[box, fill=softgreen]  (eval)   at (15.0,1){Offline scoring\\+ category accuracy};
+\node[box, fill=softgold]   (sub)    at (20.0,0){Dominant-category\\filter + CSV};
+
+\draw[->, thick] (data) -- (prep);
+\draw[->, thick] (prep) -- (index);
+\draw[->, thick] (index) -- (retr);
+\draw[->, thick] (retr) -- (eval);
+\draw[->, thick] (eval) -- (sub);
+\end{tikzpicture}}
+\caption{Active end-to-end workflow in the saved notebook.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\bfseries}l c c Y}
+\toprule
+Component & Implemented & Active in saved run & Role in the pipeline \\
+\midrule
+TF-IDF retrieval & Yes & No & Sparse lexical baseline using cosine similarity. Fast, but struggled with semantic mismatch. \\
+BM25+ retrieval & Yes & No & Stronger lexical baseline with token-level scoring and document-length normalization. \\
+Embedding retrieval & Yes & Yes & Dense semantic first-stage retrieval with Sentence-Transformers. Yielded the best metrics. \\
+Category classifier & Yes & Yes & Predicts one category per query for evaluation and final CSV output. \\
+Dominant-category filter & Yes & Yes & Keeps only documents belonging to the dominant category among the top 20 retrieved items. \\
+\bottomrule
+\end{tabularx}
+\caption{What the notebook supports versus what the saved execution actually uses.}
+\end{table}
+
+\section{Dataset and Preprocessing}
+
+The notebook loads 216,041 documents, 327 training queries, 141 test queries, and one training qrels file. The document collection is distributed across five categories, with significant class imbalance.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+\draw[->, thick, color=ink] (0,0.55) -- (6.7,0.55) node[below right] {document count};
+\filldraw[fill=softblue, draw=ink, rounded corners=1.5pt]  (0.20,4.80) rectangle (6.19,5.22);
+\node[anchor=east] at (0.05,5.01)  {\texttt{tex}};
+\node[anchor=west] at (6.28,5.01)  {68,184};
+\filldraw[fill=softgreen, draw=ink, rounded corners=1.5pt] (0.20,3.92) rectangle (4.36,4.34);
+\node[anchor=east] at (0.05,4.13)  {\texttt{unix}};
+\node[anchor=west] at (4.45,4.13)  {47,382};
+\filldraw[fill=softgold, draw=ink, rounded corners=1.5pt]  (0.20,3.04) rectangle (4.17,3.46);
+\node[anchor=east] at (0.05,3.25)  {\texttt{gaming}};
+\node[anchor=west] at (4.26,3.25)  {45,301};
+\filldraw[fill=softblue!55, draw=ink, rounded corners=1.5pt] (0.20,2.16) rectangle (2.99,2.58);
+\node[anchor=east] at (0.05,2.37)  {\texttt{programmers}};
+\node[anchor=west] at (3.08,2.37)  {32,176};
+\filldraw[fill=softgreen!70, draw=ink, rounded corners=1.5pt] (0.20,1.28) rectangle (2.12,1.70);
+\node[anchor=east] at (0.05,1.49)  {\texttt{android}};
+\node[anchor=west] at (2.21,1.49)  {22,998};
+\end{tikzpicture}
+\caption{Document distribution by category.}
+\end{figure}
+
+Text normalization is shared across all components: separators \texttt{-}, \texttt{\_}, and \texttt{/} are replaced by spaces, whitespace is collapsed, and text is lowercased. Retrieval documents are built from \texttt{title + text + tags}, while retrieval queries use only \texttt{title + text}. Average normalized lengths are 900.9 characters for documents and roughly 48.5 for queries. This length disparity informed our ultimate shift away from purely lexical methods.
+
+\section{Experimental Progression and Pipeline Optimization}
+
+Our methodology evolved through a structured series of experiments, beginning with simple baselines and moving toward a complex, optimized semantic architecture.
+
+\subsection{Phase 1 \& 2: Lexical Baselines (TF-IDF and BM25+)}
+We initially implemented a \textbf{TF-IDF} retriever (using unigrams/bigrams with \texttt{min\_df=2}). This served as a fast, lightweight baseline to validate our data loading and evaluation pipeline. While transparent, TF-IDF struggled significantly with semantic mismatch—when queries paraphrased document concepts without sharing exact vocabulary, recall dropped.
+
+To improve this, we upgraded to \textbf{BM25+}. By tokenizing the text and applying \texttt{k1=1.5} and \texttt{b=0.75}, BM25+ provided much stronger lexical ranking, correcting for the high variance in document lengths. However, BM25+ still fundamentally relied on exact token overlap, meaning synonymous phrasing remained a weakness.
+
+\subsection{Phase 3: The Semantic Shift (Dense Embeddings)}
+To overcome the vocabulary mismatch problem, we transitioned to dense semantic retrieval using the Sentence-Transformer model \texttt{all-MiniLM-L6-v2}. Documents and queries were encoded into 384-dimensional L2-normalized vectors, allowing us to retrieve documents based on contextual meaning rather than exact keywords. This dramatically improved recall.
+
+\subsection{Phase 4: Overcoming the 1.5-Hour Bottleneck}
+The shift to embeddings introduced a severe computational roadblock: initially, encoding the 216,041 documents and calculating scores took almost \textbf{1.5 hours to run}. This latency crippled our ability to run rapid iterations.
+
+To solve this, we implemented aggressive caching and chunking mechanisms:
+\begin{itemize}
+    \item \textbf{Disk Caching:} We engineered a caching system that fingerprints the dataframes and saves the expensive document embeddings as \texttt{.npy} arrays. Repeated notebook runs now load the matrix in seconds instead of re-encoding.
+    \item \textbf{Chunked Query Scoring:} Instead of creating massive, memory-crashing score blocks, we scored queries in chunks of 32 (\texttt{EMBEDDING\_QUERY\_CHUNK\_SIZE = 32}).
+    \item \textbf{Partial Sorting:} We replaced full array sorts with \texttt{np.argpartition} to extract only the top-$K$ candidates efficiently.
+\end{itemize}
+
+\subsection{Phase 5: Hyperparameter Tuning and Category Filtering}
+With the pipeline running smoothly, we began tuning our parameters. We experimented heavily with \texttt{top\_k} retrieval depths. Because our dataset features a high semantic mismatch, we found that selecting a very large initial candidate pool (\texttt{top\_k = 7,500}) safely maximized recall. 
+
+To refine this massive list, we trained a TF-IDF + LinearSVC Category Classifier. By looking at the top 20 retrieved documents, we identify a "dominant category" and filter out any subsequent documents that do not belong to that category. This successfully cleans the noise out of the long tail of the 7,500 candidates.
+
+\section{Evaluation Protocol and Results}
+
+The notebook evaluates the optimized embedding run against the 327 training queries. Because the dominant-category filter may return fewer than $K$ documents, precision is calculated based on the number of predicted documents actually present after filtering. The combined score is calculated as:
+\[
+\text{Score} = \frac{1}{4}\left(\text{Recall} + \text{Precision} + \text{MRR} + \text{Accuracy}\right)
+\]
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & TopK & Recall & Precision & MRR & Accuracy & Score \\
+\midrule
+Embedding & 7,500 & 0.91572 & 0.00178 & 0.46989 & 0.92661 & 0.59957 \\
+\bottomrule
+\end{tabular}
+\caption{Offline metrics reported by the saved notebook execution.}
+\end{table}
+
+The recall (0.9157) remains highly robust even after the category filter is applied. The filter effectively trims the fat—retained documents per query drop to a mean of roughly 4,841, without leaving any query empty. The MRR (0.46989) confirms that despite the long list, the first relevant document surfaces quite early in the ranking.
+
+\section{Conclusion}
+
+Our system evolved from basic lexical matching to a highly optimized semantic retrieval pipeline. By implementing dense embeddings, we solved the semantic mismatch problem; by engineering a robust caching and chunking system, we solved the 1.5-hour computational bottleneck; and by applying a dominant-category post-filter, we successfully cleaned the noise from deep \texttt{top\_k} retrievals. This architecture represents the final, submitted SeaFour pipeline.
+
+\end{document}
