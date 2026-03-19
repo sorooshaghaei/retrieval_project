@@ -22,7 +22,6 @@ data/**
 
 # Outputs / caches
 cache/
-outputs/
 results/
 runs/
 models/
