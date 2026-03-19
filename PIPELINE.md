@@ -33,27 +33,26 @@ All text is lowercased. Missing values, lists, and mixed types are handled by `v
 
 1. **Environment setup** — auto-detect Kaggle or local `data/` directory.
 2. **Preprocessing** — build shared `content` column for docs and queries.
-3. **Evaluation** — run all 4 models on 327 training queries; compute MAP@100 and Recall@100.
-4. **Model selection** — set `FINAL_MODEL` to the best-performing method.
-5. **Test retrieval** — run the selected model on 141 test queries.
-6. **CSV writing** — serialise results in Kaggle format.
-7. **Preview** — display the first rows of the output CSV.
+3. **Retrieval** — run the selected model (`bm25`, `tfidf`, or `embedding_hybrid`) on test queries.
+4. **CSV writing** — serialise results in Kaggle format.
+5. **Preview** — display the first rows of the output CSV.
 
 ## How to Run
 
-Open `notebooks/kaggle-submission.ipynb` and run all cells.
+Open `kaggle/kaggle_submission.ipynb` and run all cells.
 
 ## Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `FINAL_MODEL` | `hybrid` | `bm25`, `tfidf`, `embedding`, or `hybrid` |
+| `MODEL_NAME` | `bm25` | `bm25`, `tfidf`, or `embedding_hybrid` |
 | `TOP_K` | `100` | Documents per query |
-| `HYBRID_BM25_CANDIDATES` | `500` | BM25+ candidates before re-ranking |
-| `HYBRID_ALPHA` | `0.35` | Weight for BM25+ in score fusion |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
+| `HYBRID_CANDIDATE_K` | `200` | Candidates before embedding rerank |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformer model |
+| `EMBEDDING_BATCH_SIZE` | `128` | Encoding batch size |
+| `OUTPUT_PATH` | `kaggle/solutions_SeaFour.csv` | Output CSV path |
 
 ## Output
 
-- **Submission CSV:** `notebooks/solutions_SeaFour.csv`
-- **Report:** `report/retrieval_project_report.pdf`
+- **Submission CSV:** `kaggle/solutions_SeaFour.csv`
+- **Report:** `reports/retrieval_project_report.pdf`

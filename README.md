@@ -19,7 +19,7 @@ Notebook-first submission workflow implementing four retrieval methods:
 | **Embedding** | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`) |
 | **Hybrid** | Sparse + Dense | BM25+ candidates → embedding re-ranking with score fusion |
 
-All methods are evaluated on training queries (MAP@100, Recall@100), then the best model produces the test submission.
+The submission notebook focuses on generating the Kaggle CSV; offline evaluation (Precision/Recall/MRR/Accuracy) can be run separately if needed.
 
 ## Structure
 
@@ -31,10 +31,10 @@ retrieval_project/
 │   ├── queries_test.json              # 141 test queries
 │   ├── qgts_train.json                # training ground truth
 │   └── submission.csv                 # sample submission template
-├── notebooks/
-│   ├── kaggle-submission.ipynb        # active submission notebook
+├── kaggle/
+│   ├── kaggle_submission.ipynb        # submission notebook
 │   └── solutions_SeaFour.csv          # generated submission CSV
-├── report/
+├── reports/
 │   ├── retrieval_project_report.tex   # LaTeX source (XeLaTeX)
 │   └── retrieval_project_report.pdf   # compiled report
 ├── requirements.txt
@@ -53,29 +53,31 @@ pip install -r requirements.txt
 ## Quick Start
 
 1. Place competition data files in `data/`.
-2. Open `notebooks/kaggle-submission.ipynb`.
+2. Open `kaggle/kaggle_submission.ipynb`.
 3. Run all cells.
 
-The notebook auto-detects `/kaggle/input` first, then falls back to `../data`.
+The notebook auto-detects `/kaggle/input` first, then falls back to `../data`
+(or `data/` if you launch Jupyter from the repo root).
 
 ## Configuration
 
 | Parameter | Default | Options |
 |-----------|---------|--------|
-| `FINAL_MODEL` | `hybrid` | `bm25`, `tfidf`, `embedding`, `hybrid` |
+| `MODEL_NAME` | `bm25` | `bm25`, `tfidf`, `embedding_hybrid` |
 | `TOP_K` | `100` | documents per query |
-| `HYBRID_BM25_CANDIDATES` | `500` | BM25+ candidates before re-ranking |
-| `HYBRID_ALPHA` | `0.35` | BM25+ weight in score fusion |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
+| `HYBRID_CANDIDATE_K` | `200` | candidates before embedding rerank |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformer model |
+| `EMBEDDING_BATCH_SIZE` | `128` | embedding batch size |
+| `OUTPUT_PATH` | `kaggle/solutions_SeaFour.csv` | output CSV location |
 
 ## Report
 
-- Source: `report/retrieval_project_report.tex`
-- PDF: `report/retrieval_project_report.pdf`
+- Source: `reports/retrieval_project_report.tex`
+- PDF: `reports/retrieval_project_report.pdf`
 
 Build manually:
 ```bash
-cd report && xelatex -interaction=nonstopmode retrieval_project_report.tex
+cd reports && xelatex -interaction=nonstopmode retrieval_project_report.tex
 ```
 
 With VS Code LaTeX Workshop, the PDF auto-builds on every save.
