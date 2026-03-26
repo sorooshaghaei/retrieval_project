@@ -131,3 +131,6 @@ report/build/
 !report/**/*.ipynb
 !report/**/*.md
 !report/**/*.pdf
+
+scores/
+solutions_SeaFour.csv
