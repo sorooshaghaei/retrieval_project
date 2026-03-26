@@ -224,48 +224,22 @@ START
 \clearpage
 \pagenumbering{arabic}
 
-\section{Start here: data science basics for retrieval}
-\label{sec:start}
+\section{How to use this guide}
 
-\workedbox{New to the topic?}{
-Retrieval is a ranking problem on text. For each query, the system must score many candidate documents and place the most useful ones at the top. This page gives the background vocabulary and mental model you need before the notebook starts using terms such as TF-IDF, BM25+, embeddings, and Recall@K.
+\workedbox{Suggested reading order}{
+Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, and \ref{sec:emb} in order. After that, read Sections~\ref{sec:clf}, \ref{sec:metrics}, and \ref{sec:eng}. That sequence matches the actual learning path: understand the retrieval task first, then the models, then the evaluation, then the engineering.
 }
 
 \begin{itemize}
-    \item \textbf{What the task is.} In ordinary classification, one input usually gets one label. In retrieval, one query is compared against many documents, and the output is an ordered list. So the goal is not just ``is this document good or bad?'' but ``which documents should appear first?''
-    \item \textbf{Data science loop.} The loop is: define the question, collect the data, clean and normalize the text, turn text into numeric representations, choose a scoring model, rank documents, evaluate on held-out queries, inspect failures, and improve the pipeline. The notebook follows exactly this pattern.
-    \item \textbf{The main dataset objects.} A \emph{document} belongs to the corpus we search through. A \emph{query} is the user need we want to satisfy. A \emph{sample} can mean one document row, one query row, or one query-document pair depending on the stage of the pipeline. A \emph{feature} is any numeric signal we compute from text. A \emph{label} tells us what the correct answer is; in retrieval, that usually means whether a document is relevant to a query.
-    \item \textbf{Why train, validation, and test are separated.} We use \emph{train} data to fit parameters, \emph{validation} data to compare design choices such as \code{top_k} or preprocessing, and \emph{test} data only for the final unbiased check. Looking at test results too early causes \emph{data leakage}: the system starts to indirectly adapt to the test set instead of truly generalizing.
-    \item \textbf{Text cleaning and normalization.} Raw text is messy: uppercase/lowercase differences, repeated spaces, punctuation variants, tags, ids, and separators like \code{-} or \code{/}. Normalization makes equivalent strings look more alike. In this notebook, the cleaning is intentionally light so that technical tokens such as version numbers, package names, and error codes are not destroyed.
-    \item \textbf{Tokenization.} Tokenization breaks text into smaller units called \emph{tokens}. With simple tokenization, the sentence ``GPU-driver error 404'' can become tokens such as \code{gpu}, \code{driver}, \code{error}, and \code{404}. Once text is tokenized, the system can count tokens, weight them, or map them into embeddings.
-    \item \textbf{Vectorization.} Computers do not compare raw paragraphs directly; they compare numbers. Vectorization maps a query or document to a numeric representation.
-    \begin{itemize}
-        \item \emph{Sparse lexical methods} represent exact token evidence. Bag-of-words, TF-IDF, and BM25+ all reward overlap in words or terms. They work especially well when exact wording matters, such as error messages, library names, commands, or product models.
-        \item \emph{Dense semantic methods} represent meaning in a compact vector called an embedding. They can rank two texts near each other even when they use different surface words, which helps with paraphrases and vocabulary mismatch.
-    \end{itemize}
-    \item \textbf{Scoring and ranking.} After vectorization, the system computes a relevance score for every query-document pair. For TF-IDF or embeddings, that score is often cosine similarity or dot product. For BM25+, it comes from a lexical scoring formula that uses term frequency, document frequency, and document length. The exact numeric value matters less than the ordering it produces: higher score means the document should appear earlier in the ranking.
-    \item \textbf{Top-k retrieval.} A retriever usually does not keep every scored document. It keeps only the best \(K\) documents, often written \code{top_k}. Small \(K\) is faster but may miss relevant documents; large \(K\) improves coverage but increases compute and can lower precision.
-    \item \textbf{Evaluation.} We judge the system on held-out queries whose relevant documents are known. \emph{Recall@K} asks ``did we retrieve the relevant documents somewhere in the top \(K\)?'' \emph{Precision@K} asks ``how many of the top \(K\) were actually relevant?'' \emph{MAP} and \emph{MRR} care not only about whether relevant documents appear, but also how early they appear in the ranked list.
-    \item \textbf{Mental model for the rest of the guide.} Whenever a later section introduces TF-IDF, BM25+, embeddings, or category filtering, ask three questions: what representation is being built, how are scores computed, and which evaluation metric improved? That simple checklist is enough to follow most of the notebook.
+    \item \textbf{First pass:} Focus on vocabulary. Learn corpus, query, ranking, relevance, token, embedding, recall, precision, and MRR.
+    \item \textbf{Second pass:} Focus on formulas. Understand exactly what TF-IDF, BM25+, cosine similarity, and a linear SVM are doing.
+    \item \textbf{Third pass:} Focus on the notebook workflow. Connect each notebook block to the conceptual reason behind it.
+    \item \textbf{Final pass:} Focus on experimentation. Only then tune \code{top_k}, embedding batch size, or filtering strategy.
 \end{itemize}
 
-\purplebox{A tiny end-to-end example}{
-Suppose the query is ``python socket timeout''. A lexical method such as TF-IDF or BM25+ will strongly favor a document containing the exact words \code{python}, \code{socket}, and \code{timeout}. A dense embedding model may also rank a document about ``network connection delays in Python'' even if it does not repeat all three words exactly.
-
-So the full pipeline is:
-\begin{enumerate}
-    \item normalize and tokenize the query and documents,
-    \item turn them into sparse or dense numeric representations,
-    \item compute a score between the query and every candidate document,
-    \item sort documents by score and check whether the truly relevant ones rise near the top.
-\end{enumerate}
-
-This is the same pattern repeated throughout the notebook; only the representation and scoring rule change.
+\notebox{
+This competition pipeline with TF-IDF and BM25+ baselines, a dense embedding retriever as the final active model, a TF-IDF + LinearSVC category classifier, and a dominant-category post-filter.
 }
-
-\tipbox{If a later section feels abstract, come back to this page and identify the current step of the pipeline: cleaning, tokenization, vectorization, scoring, ranking, or evaluation. Once you know the step, the jargon becomes much easier to decode.}
-
-With these basics, the later sections on TF-IDF, BM25+, embeddings, category filtering, and evaluation should read like variations of one common pipeline instead of isolated ideas.
 
 \section{The retrieval problem }
 \label{sec:basics}
@@ -331,7 +305,7 @@ final ranked submission / offline evaluation
 
 \subsection{Why lexical and semantic retrieval differ}
 
-\textbf{Lexical retrieval} rewards exact token overlap. It shines when the wording matters: error strings, API names, product models, flags, codes, and identifiers. \textbf{Semantic retrieval} uses learned embeddings to place related meanings near one another, so it succeeds when the query paraphrases the document instead of reusing the same words.
+Lexical retrieval is driven by token overlap. It is strong when exact words matter, such as error messages, API names, product names, flags, and codes. Semantic retrieval tries to map different phrasings with similar meaning to nearby vectors. It is stronger when the query paraphrases the document instead of repeating the same words.
 
 \warningbox{
 A query and a relevant document can talk about the same issue while sharing few exact words. That failure mode is often called \textbf{vocabulary mismatch} or \textbf{semantic mismatch}. This is the main reason embedding retrieval became the final active method in the notebook.
