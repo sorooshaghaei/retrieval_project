@@ -61,8 +61,8 @@ class RetrievalPipelineConfig:
     evaluation_top_ks: tuple[int, ...] = (7_500,)
     submit_top_k: int = 7_500
     enable_category_prediction: bool = True
-    enable_category_filter: bool = False
-    enable_cross_encoder_rerank: bool = False
+    enable_category_filter: bool = True
+    enable_cross_encoder_rerank: bool = True
     enable_embedding_cache: bool = True
     enable_classic_cache: bool = True
     token_pattern: str = r"[a-z0-9]+"
