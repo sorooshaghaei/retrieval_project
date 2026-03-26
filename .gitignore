@@ -1,6 +1,4 @@
-#################################
 # OS / system
-#################################
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -10,9 +8,7 @@ Icon?
 .Trashes
 .fseventsd
 
-#################################
-# Python
-#################################
+# Python caches / artifacts
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,9 +21,7 @@ dist/
 pip-wheel-metadata/
 *.whl
 
-#################################
 # Virtual environments
-#################################
 .venv/
 .venv
 venv/
@@ -35,16 +29,12 @@ env/
 ENV/
 src/.venv
 
-#################################
 # Jupyter
-#################################
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
 notebooks/**/*.csv
 
-#################################
 # Tests / coverage
-#################################
 .pytest_cache/
 .tox/
 .nox/
@@ -53,64 +43,47 @@ notebooks/**/*.csv
 htmlcov/
 coverage.xml
 
-#################################
 # Type checkers / linters
-#################################
 .mypy_cache/
 .pyright/
 .pytype/
 .pyre/
 .ruff_cache/
 
-#################################
 # Logs
-#################################
 *.log
 pip-log.txt
 
-#################################
 # IDEs / editors
-#################################
 .vscode/
 .idea/
 *.swp
 *.swo
 
-#################################
 # Secrets / env files
-#################################
 .env
 .env.*
 !.env.example
 
-#################################
-# Data (DO NOT COMMIT)
-#################################
-# Ignore everything under data, but keep folder structure
+# Data (do not commit)
 data/**
 !data/.gitkeep
 !data/**/.gitkeep
 
-#################################
-# Common ML outputs (usually huge)
-#################################
+# Common ML outputs
 outputs/
 results/
-cache/
+/cache/
 runs/
-models/
+/models/
 checkpoints/
 wandb/
 mlruns/
 lightning_logs/
 tensorboard/
 
-#################################
 # Report temp files
-#################################
 report/~$*
-
-# LaTeX (optional)
 report/**/*.aux
 report/**/*.bbl
 report/**/*.blg
@@ -122,9 +95,7 @@ report/**/*.fdb_latexmk
 report/**/*.fls
 report/build/
 
-#################################
 # Keep notebooks and reports
-#################################
 !notebooks/
 !notebooks/**/*.ipynb
 !report/
@@ -132,5 +103,6 @@ report/build/
 !report/**/*.md
 !report/**/*.pdf
 
+# Project outputs
 scores/
 solutions_SeaFour.csv
