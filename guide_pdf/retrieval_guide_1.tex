@@ -95,7 +95,13 @@
   pdfcreator={LaTeX}
 }
 
-\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\code}[1]{%
+  \ifmmode
+    \text{\nolinkurl{\detokenize{#1}}}%
+  \else
+    \nolinkurl{\detokenize{#1}}%
+  \fi
+}
 \newcommand{\vect}[1]{\mathbf{#1}}
 
 % Box definitions
@@ -180,7 +186,7 @@ path picture={
 \vspace{0.6cm}
 
 \workedbox{Purpose}{
-This guide explains the retrieval project notebook from the ground up. It starts with the basic language of information retrieval, then moves to TF-IDF, BM25+, dense embeddings, category classification, dominant-category filtering, evaluation, and performance engineering. Compared with the earlier version, this edition also adds slower explanations, symbol-by-symbol formula reading, and small worked examples so the mathematical parts are easier to follow. 
+This guide explains the retrieval project notebook from the ground up. It starts with the basic language of information retrieval, then moves to TF-IDF, BM25+, dense embeddings, category classification, cross-encoder reranking, validation splits, leakage-safe experimentation, evaluation, and performance engineering. Compared with the earlier version, this edition also adds slower explanations, symbol-by-symbol formula reading, notebook-aligned code examples, and a more complete discussion of why the pipeline is now a two-stage retrieval system rather than a single retriever with a light post-filter.
 }
 
 \purplebox{Be careful}{
@@ -206,13 +212,17 @@ START
   |
   +--> Section 6: dense embeddings and semantic retrieval
   |
-  +--> Section 7: classifier + dominant-category filter
+  +--> Section 7: two-stage retrieval, cross-encoders, and category signals
   |
-  +--> Section 8: evaluation metrics and score interpretation
+  +--> Section 8: validation, leakage, and honest experimentation
   |
-  +--> Section 9: caching, chunking, argpartition, and runtime design
+  +--> Section 9: evaluation metrics and score interpretation
   |
-  `--> Appendix: formulas, oral-exam answers, and a tuning checklist
+  +--> Section 10: caching, chunking, argpartition, and runtime design
+  |
+  +--> Section 11: notebook walkthrough and full pipeline mental model
+  |
+  `--> Appendix: glossary, formulas, worked code examples, and oral-exam answers
 \end{asciibox}
 
 \vfill
@@ -227,7 +237,7 @@ START
 \section{How to use this guide}
 
 \workedbox{Suggested reading order}{
-Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, and \ref{sec:emb} in order. After that, read Sections~\ref{sec:clf}, \ref{sec:metrics}, and \ref{sec:eng}. That sequence matches the actual learning path: understand the retrieval task first, then the models, then the evaluation, then the engineering.
+Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, and \ref{sec:emb} in order. After that, read Sections~\ref{sec:clf} and \ref{sec:val} carefully before moving on to Sections~\ref{sec:metrics} and \ref{sec:eng}. That sequence matches the actual learning path: understand the task first, then the models, then why one stage is not enough, then why validation protocol matters, then the metrics, and only after that the engineering.
 }
 
 \begin{itemize}
@@ -238,7 +248,7 @@ Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, 
 \end{itemize}
 
 \notebox{
-This competition pipeline combines TF-IDF and BM25+ baselines, a dense embedding retriever as the final active model, a TF-IDF + LinearSVC category classifier, and a dominant-category post-filter.
+This competition pipeline combines TF-IDF and BM25+ baselines, a dense embedding retriever as the first-stage active model, a TF-IDF + LinearSVC category classifier, a cross-encoder reranker for the top candidates, and a leakage-safe validation protocol for tuning \code{top_k}, \code{top_m}, and category bonus before final submission.
 }
 
 \section{The retrieval problem }
@@ -376,8 +386,9 @@ query q
   v
 ranked list of top_k documents
   |
-  v
-optional category-based filtering
+  +--> optional cross-encoder reranking of top_m
+  |
+  `--> optional category-aware score bonus
   |
   v
 final ranked submission / offline evaluation
@@ -702,7 +713,7 @@ If vectors are L2-normalized, cosine similarity and dot product become equivalen
 \]
 
 \workedbox{A semantic example}{
-Suppose the query says \code{program hangs during launch} and a relevant document says \code{application freezes on startup}. A lexical retriever may struggle because \code{hangs} is not the same token as \code{freezes}, and \code{launch} is not the same token as \code{startup}. A dense embedding model can still place those two texts near each other because it learns semantic similarity rather than relying only on exact token overlap.
+Suppose the query says ``program hangs during launch'' and a relevant document says ``application freezes on startup''. A lexical retriever may struggle because \code{hangs} is not the same token as \code{freezes}, and \code{launch} is not the same token as \code{startup}. A dense embedding model can still place those two texts near each other because it learns semantic similarity rather than relying only on exact token overlap.
 }
 
 \subsection{Why dense retrieval helps here}
@@ -749,68 +760,420 @@ Dense retrieval is not perfect.
 Dense retrieval is usually a recall tool first. In many systems, it brings more relevant candidates into the top-\(K\), but later stages are still needed to clean noise.
 }
 
-\section{The category classifier and dominant-category filter}
+\section{Two-stage retrieval, cross-encoders, and category signals}
 \label{sec:clf}
 
-\subsection{Why add a classifier to a retriever?}
+\subsection{Why a single retriever is often not enough}
 
-The retriever finds documents that look relevant. The classifier predicts which topical category a query belongs to. These are related but not identical tasks.
+Students often imagine retrieval as one scoring formula applied once. In practice, high-performing systems are frequently \textbf{multi-stage}. One component tries to avoid missing relevant documents, while a later component tries to sort the most promising candidates more precisely.
+
+That is exactly the logic of the current notebook:
+\begin{enumerate}
+    \item a \textbf{first-stage retriever} retrieves a large candidate set with high recall,
+    \item a \textbf{cross-encoder reranker} looks more carefully at the top part of that candidate set,
+    \item a \textbf{category signal} nudges the reranked scores so category-consistent documents receive a small bonus instead of a hard cut.
+\end{enumerate}
+
+\workedbox{Two jobs, not one}{
+The first stage asks: \emph{which 7{,}500 documents are worth keeping at all?} That is mostly a recall problem. The second stage asks: \emph{inside the most promising 20, 30, 50, or 100 candidates, which ones deserve the very top ranks?} That is mostly a precision and ordering problem.}
+
+\subsection{Candidate generation versus reranking}
+
+The first-stage embedding retriever is built to be efficient at large scale. It encodes documents once, encodes each query, and computes many similarities quickly. That makes it practical to search hundreds of thousands of documents.
+
+But this speed comes with a limitation: the query and the document are encoded \emph{independently}. This is often called a \textbf{bi-encoder} pattern. It is excellent for retrieval speed, but it is not the most detailed way to judge whether one specific query-document pair is truly relevant.
+
+The cross-encoder solves that later, but only for a much smaller set of candidates.
+
+\begin{asciibox}[title={Two-stage retrieval in one query}]
+query q
+  |
+  v
+first-stage retriever
+  |
+  +--> keep many candidates (large top_k)
+  |
+  v
+top_k candidate list
+  |
+  v
+cross-encoder rerank of only top_m candidates
+  |
+  v
+soft category bonus added to reranked scores
+  |
+  v
+final ranked list
+\end{asciibox}
+
+\subsection{What a cross-encoder is, from zero}
+
+A cross-encoder is a model that receives the \emph{query and document together} and produces one score for the pair. In notation, we can write:
+\[
+\mathrm{score}_{\text{cross}}(q,d)=f_\theta(q,d),
+\]
+where \(f_\theta\) is a learned neural network.
+
+A useful contrast is:
+\begin{itemize}
+    \item \textbf{Embedding retriever / bi-encoder:} encode \(q\) once, encode \(d\) once, compare the vectors.
+    \item \textbf{Cross-encoder:} feed the exact pair \((q,d)\) into the model and ask for one joint relevance score.
+\end{itemize}
+
+This joint processing is more expressive because the model can directly reason about interactions between query words and document words. For example, it can notice that \code{startup} in the document relates to \code{launch} in the query \emph{in this specific pair}, rather than relying only on a global vector similarity.
+
+\subsection{Why a cross-encoder is more accurate but slower}
+
+A cross-encoder is usually more accurate at fine-grained ranking because it sees both texts at the same time. But it is dramatically slower at large scale, because it cannot precompute one fixed document vector and reuse it for every query. Instead, it must evaluate many query-document pairs individually.
+
+That is why the notebook does \emph{not} run the cross-encoder on all 216{,}041 documents for every query. It would be far too expensive. Instead, it uses the fast embedding stage to narrow the search space first.
+
+\purplebox{Think of the cross-encoder as a careful judge}{
+The embedding retriever is a fast scout. It quickly finds many plausible candidates. The cross-encoder is a slower judge. It cannot inspect the whole collection, but it can make better decisions when you show it a shortlist.}
+
+\subsection{Why rerank only the top-m candidates?}
+
+Suppose \code{top_k=7500}. That large candidate pool is useful for recall, but reranking all 7{,}500 candidates with a cross-encoder for every query would still be expensive. The notebook therefore uses another cutoff, \code{top_m}, which might be 20, 30, 50, or 100.
+
+The logic is:
+\begin{enumerate}
+    \item let the first-stage retriever find many potentially relevant documents,
+    \item assume the most important ordering mistakes happen near the top,
+    \item spend the expensive cross-encoder budget only where it matters most.
+\end{enumerate}
+
+This is why \code{top_k} and \code{top_m} solve different problems:
+\begin{itemize}
+    \item \code{top_k}: how many candidates do we keep after the fast retrieval stage?
+    \item \code{top_m}: how many of those candidates do we rescore with the expensive reranker?
+\end{itemize}
+
+\subsection{How the notebook trains the cross-encoder}
+
+The current notebook trains the cross-encoder with binary query-document pairs:
+\begin{itemize}
+    \item \textbf{positive pairs:} a train query and one of its relevant documents,
+    \item \textbf{negative pairs:} a train query and a document that is not relevant.
+\end{itemize}
+
+The model is therefore not learning ``category'' directly. It is learning a more local question:
+\begin{quote}
+Given this exact query and this exact document, should this pair receive a high relevance score or a low one?
+\end{quote}
+
+\subsection{What positives, negatives, and hard negatives mean}
+
+Positive examples are easy to understand: they come from the ground-truth relevant documents.
+
+Negative examples need more care. There are two broad kinds:
+\begin{itemize}
+    \item \textbf{random negatives:} documents sampled from the corpus that are assumed not to be relevant,
+    \item \textbf{hard negatives:} documents that the first-stage retriever ranked highly but that are not actually relevant.
+\end{itemize}
+
+Hard negatives are especially useful because they are the mistakes the model is most likely to make. They are often semantically similar yet still wrong, so they teach the reranker a more difficult discrimination task.
+
+\workedbox{Why hard negatives matter}{
+Imagine the query is \code{android app crashes on startup}. A random negative might be an unrelated \code{tex} document about LaTeX footnotes. That negative is too easy. A hard negative is more like a \code{programmers} or \code{android} document about \code{app freezes when loading images}. That pair looks much more plausible, so learning to reject it is more valuable.}
+
+\subsection{A notebook-aligned code sketch of cross-encoder training}
+
+\begin{lstlisting}[caption={Simplified logic for building cross-encoder training pairs}]
+query_text_map = build_text_map(train_queries_frame)
+doc_text_map = build_text_map(docs_frame)
+
+hard_negative_doc_ids_by_query = mine_hard_negative_doc_ids(
+    train_queries_frame=train_queries_frame,
+    docs_frame=docs_frame,
+    ground_truth=ground_truth,
+    query_ids=candidate_query_ids,
+    top_k=CROSS_ENCODER_HARD_NEGATIVE_TOP_K,
+)
+
+training_examples = build_cross_encoder_training_examples(
+    query_text_map=query_text_map,
+    doc_text_map=doc_text_map,
+    ground_truth=ground_truth,
+    query_ids=candidate_query_ids,
+    max_positives_per_query=4,
+    negatives_per_positive=4,
+    hard_negative_doc_ids_by_query=hard_negative_doc_ids_by_query,
+)
+
+cross_encoder.fit(train_dataloader=train_loader, epochs=5)
+\end{lstlisting}
+
+Read that code in words:
+\begin{enumerate}
+    \item build query and document text lookups,
+    \item mine difficult wrong documents using the first-stage retriever,
+    \item assemble positive and negative training pairs,
+    \item fit the cross-encoder on those pairs.
+\end{enumerate}
+
+\subsection{What the category classifier is doing here}
+
+The retriever and reranker score relevance. The classifier predicts a category label for each query. These are different tasks.
 
 In this notebook, the category classifier is trained with TF-IDF features and a linear support vector machine:
 \begin{itemize}
     \item features: TF-IDF vectors,
     \item classifier: \code{LinearSVC},
-    \item label: one category per example.
+    \item label: one category per query.
 \end{itemize}
 
 \subsection{What a linear SVM is doing here}
 
-A linear SVM learns a separating hyperplane between classes in feature space. With a one-vs-rest or multiclass scheme, it can predict one category for each query from its TF-IDF representation.
+A linear SVM learns a separating hyperplane between classes in feature space. With a multiclass scheme, it predicts one category for each query from its TF-IDF representation.
 
 A clean academic description is:
 \begin{quote}
 The classifier is a linear discriminative model over sparse TF-IDF features, trained to predict the most likely forum category of each query.
 \end{quote}
 
-\subsection{Why this can improve the pipeline}
+\subsection{How the category bonus works}
 
-Suppose dense retrieval returns mostly good documents but also mixes in some documents from semantically nearby yet wrong categories. If the query is really \code{android} and many deep-ranked documents drift into \code{programmers}, a category filter can remove part of that noise.
+Earlier versions of the project emphasized a strict dominant-category filter. The current notebook uses a softer idea during reranking: if the predicted query category matches the document category, the system adds a small scalar bonus to the reranked score.
 
-\subsection{The notebook's dominant-category filter}
+In simplified form:
+\[
+\mathrm{final\_score}(q,d)=\mathrm{cross\_score}(q,d)+\mathrm{bonus}(q,d),
+\]
+where
+\[
+\mathrm{bonus}(q,d)=
+\begin{cases}
+\lambda & \text{if predicted query category = document category} \\
+0 & \text{otherwise.}
+\end{cases}
+\]
 
-The notebook does something specific and clever:
+So the category model does \emph{not} decide relevance on its own. It only nudges the cross-encoder ranking a little.
+
+\warningbox{
+This soft bonus is much safer than a hard filter. A hard filter can delete relevant documents entirely if the predicted category is wrong. A soft bonus only shifts scores; it does not force all nonmatching documents to disappear.}
+
+\subsection{The older dominant-category filter versus the newer soft bonus}
+
+The guide still discusses the dominant-category filter because it is educational and still implemented as a utility. But conceptually, the two strategies are different:
+\begin{itemize}
+    \item \textbf{dominant-category filter:} choose one category and remove documents outside it,
+    \item \textbf{soft category bonus:} keep all documents but slightly reward category agreement.
+\end{itemize}
+
+The soft bonus is the more conservative and generally more robust choice.
+
+\subsection{A complete toy reranking example}
+
+Suppose the embedding retriever returns these five candidates for one query:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Document & Embedding rank & Cross-encoder score & Category match bonus \\
+\midrule
+\(d_1\) & 1 & 1.20 & \(+0.0\) \\
+\(d_2\) & 2 & 2.05 & \(+0.5\) \\
+\(d_3\) & 3 & 1.95 & \(+0.0\) \\
+\(d_4\) & 4 & 1.30 & \(+0.5\) \\
+\(d_5\) & 5 & 0.80 & \(+0.5\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Then the final reranking scores become:
+\[
+d_1:1.20,\quad d_2:2.55,\quad d_3:1.95,\quad d_4:1.80,\quad d_5:1.30.
+\]
+
+So the final order becomes
+\[
+d_2 \succ d_3 \succ d_4 \succ d_5 \succ d_1.
+\]
+
+Notice what happened:
+\begin{itemize}
+    \item the embedding stage decided which five candidates deserved attention,
+    \item the cross-encoder changed the local ordering,
+    \item the category bonus gave an extra nudge but did not dominate the whole score.
+\end{itemize}
+
+\subsection{What to say in one sentence}
+
+If you need a short explanation for class, say this:
+\begin{quote}
+The notebook uses a two-stage retrieval design: a fast dense bi-encoder retrieves a large candidate pool, then a cross-encoder reranks only the top candidates more accurately, with a lightweight category bonus added as a soft prior.
+\end{quote}
+
+\section{Validation, leakage, and honest experimentation}
+\label{sec:val}
+
+\subsection{Train, validation, and test from zero}
+
+These words are used constantly in machine learning, but students are often not told slowly enough what they mean.
+
+\begin{itemize}
+    \item \textbf{Train set:} data used to fit model parameters.
+    \item \textbf{Validation set:} data used to choose hyperparameters and compare candidate settings.
+    \item \textbf{Test set:} data reserved for the final unbiased evaluation or submission.
+\end{itemize}
+
+In plain language:
+\begin{itemize}
+    \item the model \emph{learns} from the train set,
+    \item the researcher \emph{decides} settings using the validation set,
+    \item the final system is \emph{judged} on the test set.
+\end{itemize}
+
+\subsection{What a hyperparameter is}
+
+A hyperparameter is a setting chosen by the experimenter rather than learned directly by gradient descent or fitting. In this notebook, examples include:
+\begin{itemize}
+    \item \code{top_k},
+    \item \code{top_m},
+    \item category bonus strength,
+    \item number of cross-encoder epochs,
+    \item number of negatives per positive pair.
+\end{itemize}
+
+You do not want to choose these by looking at the same examples that the model already learned from, because then you start adapting your whole system to that same data repeatedly.
+
+\subsection{What leakage means}
+
+\textbf{Data leakage} means information from the evaluation target leaks into training or tuning in a way that makes the measured score look better than it really is.
+
+Leakage does not always mean a programming bug. Sometimes it is an experimental-design bug. A very common form is:
+\begin{quote}
+train a model on one set of labeled examples, then evaluate it on those same examples and treat the result as if it were a fair estimate of generalization.
+\end{quote}
+
+\subsection{Why evaluating on the same 327 train queries was optimistic}
+
+Suppose the cross-encoder is trained on all 327 labeled queries. Then the offline evaluation loop also runs on those same 327 queries. Even if the relevant documents are numerous and the pair construction is indirect, the system has still been tuned and fit on the very queries used for scoring. That is optimistic.
+
+Why?
+\begin{itemize}
+    \item the cross-encoder has already seen those queries during fitting,
+    \item the hard negatives are mined from those same labeled queries,
+    \item the researcher may also choose \code{top_k}, \code{top_m}, and bonus strength based on those same results.
+\end{itemize}
+
+At that point, the offline score is not a clean estimate of how well the system will behave on unseen queries. It is partly a measurement of how well the system adapted to the known training queries.
+
+\warningbox{
+An evaluation score is only honest if the examples used to choose the system are separated from the examples used to judge the system.}
+
+\subsection{Why category-stratified splitting helps}
+
+The 327 labeled queries are not evenly distributed by category. The counts are:
+\begin{center}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Category & Labeled queries & Approx.\ validation size at 20\% \\
+\midrule
+android & 57 & 11 \\
+gaming & 41 & 8 \\
+programmers & 52 & 10 \\
+tex & 130 & 26 \\
+unix & 47 & 9 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+If you make a random split without thinking about category balance, you might accidentally place too few queries from one category in validation. Then the validation score becomes less representative. Stratification fixes that by preserving category proportions approximately.
+
+\subsection{The corrected protocol in plain English}
+
+The notebook now follows this logic:
 \begin{enumerate}
-    \item take the top \(N\) retrieved documents for one query, with \(N=20\),
-    \item count the categories in that top window,
-    \item find the dominant category,
-    \item keep only documents from that category in the final ranked list.
+    \item split the 327 labeled queries into \textbf{cross-encoder train} and \textbf{validation},
+    \item train the cross-encoder only on the train split,
+    \item run first-stage retrieval on validation queries,
+    \item tune \code{top_k}, \code{top_m}, and category bonus on validation,
+    \item pick the best validation configuration,
+    \item retrain the cross-encoder on all 327 labeled queries,
+    \item generate the final Kaggle submission on the test queries.
 \end{enumerate}
 
-So the top retrieved documents vote for a category, and the rest of the ranked list is filtered accordingly.
-
-\begin{asciibox}[title={Dominant-category filter}]
-Top 20 retrieved docs for one query
+\begin{asciibox}[title={Leakage-safe protocol}]
+327 labeled train queries
   |
-  +--> android: 11
-  +--> programmers: 5
-  +--> unix: 4
+  +--> split-train queries ----> fit cross-encoder
   |
-  `--> dominant category = android
+  `--> validation queries ----> tune top_k / top_m / category bonus
 
-Keep only documents labeled android in the final list.
+best validation configuration
+  |
+  v
+retrain cross-encoder on all 327 labeled queries
+  |
+  v
+run final test submission
 \end{asciibox}
 
-\subsection{Why this helps}
+\subsection{Why retrain on all 327 after tuning?}
 
-It can clean the long tail of a large \code{top_k} ranking. If the first-stage retriever returns 7,500 documents, later positions inevitably contain noise. A dominant-category filter removes some of that noise while preserving the general ranking order inside the chosen category.
+Once hyperparameters are chosen, there is no longer a reason to waste labeled training data. At that point, the honest model-selection step is already finished. So the notebook retrains the final cross-encoder on all available labeled train queries before producing the submission.
 
-\subsection{What the risk is}
+This is a standard pattern:
+\begin{enumerate}
+    \item use validation to decide \emph{how} to build the system,
+    \item then use all available training labels to build the strongest final version of that chosen system.
+\end{enumerate}
 
-If the dominant category is wrong for a query, the filter can remove relevant documents from the correct category. So the filter trades off robustness against category drift with the risk of category over-commitment.
+\subsection{What numbers you should and should not report}
 
-\tipbox{
-You can describe the post-filter as a \textbf{high-precision biasing step}: it assumes that the category distribution of the top window is informative enough to prune later noise.
-}
+During development, the key score is the \textbf{validation score}. That is the score used to compare settings fairly.
+
+After final retraining on all 327 queries, you should \emph{not} compute a new ``offline score'' on those same 327 queries and present it as if it were equally fair. That number would again be optimistic.
+
+So a careful report distinguishes:
+\begin{itemize}
+    \item \textbf{validation performance:} used for model selection,
+    \item \textbf{final submission output:} generated after retraining on all labeled data,
+    \item \textbf{public or private leaderboard score:} obtained externally on hidden test labels.
+\end{itemize}
+
+\subsection{What is the difference between model parameters and protocol parameters?}
+
+Students often mix together three different things:
+\begin{itemize}
+    \item \textbf{model parameters:} the learned weights inside the cross-encoder,
+    \item \textbf{hyperparameters:} settings like \code{top_k}, \code{top_m}, and category bonus,
+    \item \textbf{protocol choices:} train/validation split strategy, stratification, and when retraining happens.
+\end{itemize}
+
+The protocol is not a cosmetic detail. It determines whether the score means anything trustworthy.
+
+\subsection{A notebook-aligned code sketch of the validation protocol}
+
+\begin{lstlisting}[caption={Simplified leakage-safe tuning loop}]
+ce_train_query_ids, val_query_ids = stratified_query_train_validation_split(
+    train_queries_df,
+    validation_fraction=0.2,
+    seed=42,
+)
+
+ce_train_queries_df = select_rows_by_ids(train_queries_df, ce_train_query_ids)
+val_queries_df = select_rows_by_ids(train_queries_df, val_query_ids)
+
+ce_train_ground_truth = subset_ground_truth(ground_truth, ce_train_query_ids)
+val_ground_truth = subset_ground_truth(ground_truth, val_query_ids)
+
+validation_cross_encoder = build_or_load_cross_encoder(
+    train_queries_frame=ce_train_queries_df,
+    docs_frame=docs_df,
+    ground_truth=ce_train_ground_truth,
+)
+
+for top_k in TUNING_TOP_KS:
+    for top_m in TUNING_RERANK_TOP_MS:
+        for bonus in TUNING_CATEGORY_BONUSES:
+            results = run_retrieval(... queries_frame=val_queries_df, top_k=max(TUNING_TOP_KS))
+            reranked = rerank_results_with_cross_encoder(... rerank_top_m=top_m, category_bonus=bonus)
+            metrics = leaderboard_score(reranked, val_ground_truth, k=top_k)
+\end{lstlisting}
+
+This is one of the most important conceptual updates in the whole project. The guide is emphasizing it because good retrieval work is not only about good models; it is also about honest experimental design.
 
 \section{Evaluation metrics and how to read them}
 \label{sec:metrics}
@@ -882,11 +1245,25 @@ This is important because the expensive step is often document encoding, not que
 
 The notebook also keeps objects in memory dictionaries during a live session. This avoids unnecessary repeated loads from disk after the first use.
 
+\subsection{Hardware device selection}
+
+Modern notebook code often contains references to \code{cpu}, \code{cuda}, or \code{mps}. These are not retrieval methods. They are hardware execution choices:
+\begin{itemize}
+    \item \code{cpu}: run on the processor,
+    \item \code{cuda}: run on an NVIDIA GPU,
+    \item \code{mps}: run on Apple Silicon through Metal.
+\end{itemize}
+
+In the retrieval notebook, dense models and cross-encoders can benefit from hardware acceleration, but stability matters too. That is why device selection is an engineering concern rather than a retrieval-theory concern. A model can be conceptually correct while still failing at runtime if the chosen hardware backend is unstable.
+
+\tipbox{
+When you see device-selection code in the notebook, read it as \emph{systems engineering for reliable model execution}, not as part of the ranking algorithm itself.}
+
 \subsection{Chunked query scoring}
 
 Instead of scoring all queries against all documents in one giant matrix multiplication, the notebook scores query chunks, for example 32 at a time. This controls peak memory usage.
 
-\subsection{Partial sorting with \code{np.argpartition}}
+\subsection{Partial sorting with np.argpartition}
 
 A full sort of all document scores for every query is expensive when you only need the best \(K\) items. \code{np.argpartition} is a partial-selection method. It finds the top part more cheaply than a full exact sort of the entire array. You can then sort only that smaller candidate slice.
 
@@ -926,7 +1303,9 @@ The saved notebook is organized in a clean progression:
     \item index construction and caching,
     \item retrieval functions,
     \item evaluation logic,
-    \item experiment loop,
+    \item cross-encoder training utilities,
+    \item stratified train/validation split and tuning loop,
+    \item final retrain on all 327 labeled queries,
     \item test submission generation,
     \item conclusion.
 \end{enumerate}
@@ -938,14 +1317,15 @@ The saved notebook is organized in a clean progression:
 \toprule
 \textbf{Notebook region} & \textbf{Conceptual role} \\
 \midrule
-Imports and config & Defines global settings: active model, \code{top_k}, tokenizer pattern, TF-IDF parameters, BM25+ parameters, embedding model name, cache directories. \\
+Imports and config & Defines global settings: active model, \code{top_k} candidates, \code{top_m} reranking depth, tokenizer pattern, TF-IDF parameters, BM25+ parameters, embedding model name, cache directories, and device selection. \\
 Data loading & Reads raw JSON files, validates required columns, checks ids, and enforces reproducibility assumptions. \\
 Preprocessing & Normalizes text and builds unified \code{content} fields for documents and queries. \\
 Index construction & Fits TF-IDF, builds BM25+, loads the sentence-transformer, and prepares or loads cached embeddings. \\
 Retrieval functions & Converts one method choice into a ranked list of documents for each query. \\
-Evaluation logic & Computes Recall, Precision, MRR, Accuracy, and their average score. \\
-Experiment loop & Runs the selected models, applies the dominant-category filter, and collects summary tables. \\
-Submission generation & Runs the final model on the test queries and writes the output CSV. \\
+Cross-encoder utilities & Builds pairwise training examples, mines hard negatives, trains or loads the reranker, and applies reranking plus category bonus. \\
+Evaluation logic & Computes Recall, Precision, MRR, Accuracy, and their average score on the validation split. \\
+Experiment loop & Runs the selected models, sweeps \code{top_k}, \code{top_m}, and category bonus, and stores validation summaries. \\
+Submission generation & Retrains the cross-encoder on all 327 labeled queries, runs the final model on the test queries, and writes the output CSV. \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -956,8 +1336,10 @@ A crucial distinction in the project report is this:
 \begin{itemize}
     \item TF-IDF retrieval is implemented, but not the final active submission method.
     \item BM25+ retrieval is implemented, but not the final active submission method.
-    \item Embedding retrieval is both implemented and active.
-    \item The category classifier and dominant-category filter are active support components.
+    \item Embedding retrieval is the active first-stage retriever.
+    \item The cross-encoder is the active second-stage reranker.
+    \item The category classifier is an active support component.
+    \item The strict dominant-category filter is still educational and implemented, but the active notebook protocol now favors a soft category bonus during reranking.
 \end{itemize}
 
 That is an academically strong experimental structure: keep simpler baselines for comparison, but submit the method that actually wins on the observed task.
@@ -971,17 +1353,20 @@ That is an academically strong experimental structure: keep simpler baselines fo
 3. Normalize text consistently.
 4. Build document content and query content.
 5. Train the query category classifier (TF-IDF + LinearSVC).
-6. Build retrieval artifacts for TF-IDF, BM25+, and/or embeddings.
-7. Run retrieval for each query.
-8. Keep a large top_k candidate list to protect recall.
-9. Use top-20 category composition to choose a dominant category.
-10. Filter the candidate list by that dominant category.
-11. Evaluate on train queries.
-12. Run the final model on test queries and export CSV.
+6. Split the 327 labeled train queries into train and validation folds.
+7. Train the cross-encoder only on the split-train queries.
+8. Build retrieval artifacts for TF-IDF, BM25+, and/or embeddings.
+9. Run first-stage retrieval on the validation queries.
+10. Keep a large top_k candidate list to protect recall.
+11. Rerank only the top_m candidates with the cross-encoder.
+12. Add a soft category bonus when query and document categories agree.
+13. Score the validation fold and choose the best hyperparameters.
+14. Retrain the cross-encoder on all 327 labeled queries.
+15. Run the final model on test queries and export CSV.
 \end{asciibox}
 
 \purplebox{One-sentence summary}{
-The final system is a dense semantic first-stage retriever, supported by a sparse linear category classifier and a dominant-category filter, all wrapped in a cache-aware evaluation and submission pipeline.
+The final system is a dense semantic first-stage retriever, followed by a cross-encoder reranker and a lightweight category-aware score bonus, all wrapped in a cache-aware validation and submission pipeline.
 }
 
 \section{Common misunderstandings corrected}
@@ -1007,15 +1392,27 @@ No. Dense embeddings are learned vector representations intended to capture sema
 Not necessarily. With very large \(K\), precision can be numerically tiny while recall and MRR remain strong. Metric interpretation depends on task design.
 \end{termcard*}
 
+\begin{termcard*}{Misunderstanding 5}
+\textbf{``A cross-encoder is just a slower embedding model.''}\\
+Not exactly. A bi-encoder embeds query and document separately, while a cross-encoder scores the query-document pair jointly. The extra cost comes from this more expressive pairwise interaction.
+\end{termcard*}
+
+\begin{termcard*}{Misunderstanding 6}
+\textbf{``If the offline score is higher on the train queries, the system is better.''}\\
+Not necessarily. If the same labeled queries were used for fitting and evaluation, the score can be optimistic because of leakage. Validation protocol matters as much as the raw number.
+\end{termcard*}
+
 \section{How to explain this project academically in class or in a report}
 
 \subsection{Short version}
 
-``We implemented three first-stage retrievers: TF-IDF, BM25+, and dense embeddings. TF-IDF and BM25+ serve as sparse lexical baselines, while the final active system uses a sentence-transformer embedding retriever because it better addresses vocabulary mismatch. We then combine retrieval with a TF-IDF + LinearSVC category classifier and a dominant-category post-filter to clean the long tail of a large top-\(K\) ranking. The pipeline is optimized with artifact caching, chunked query scoring, and partial top-\(K\) selection.''
+\begin{quote}
+``We implemented TF-IDF, BM25+, and dense embedding retrieval as first-stage methods. The final active system uses dense embeddings for candidate generation, then applies a cross-encoder reranker to the top candidates and adds a soft category-aware bonus. Hyperparameters are tuned on a stratified validation split to avoid leakage, and the final reranker is retrained on all labeled training queries before submission.''
+\end{quote}
 
 \subsection{Longer version}
 
-``The project begins with strict schema validation and shared normalization to make model comparisons trustworthy. Documents are represented as title + body + tags, while queries use title + body for retrieval and can include tags for category prediction. TF-IDF provides a sparse cosine baseline, BM25+ provides a stronger lexical baseline with term-frequency saturation and document-length normalization, and dense embeddings provide a semantic retriever robust to paraphrase. Because dense retrieval is computationally expensive, the notebook caches document embeddings and scores queries in chunks. After retrieval, a lightweight linear category classifier predicts topical structure, and a dominant-category filter uses the top retrieved window to suppress cross-category noise before evaluation and submission generation.''
+``The project begins with strict schema validation and shared normalization to make model comparisons trustworthy. Documents are represented as title + body + tags, while queries use title + body or title + body + tags depending on the subtask. TF-IDF provides a sparse cosine baseline, BM25+ provides a stronger lexical baseline with term-frequency saturation and document-length normalization, and dense embeddings provide a semantic first-stage retriever robust to paraphrase. Because dense retrieval is computationally expensive, the notebook caches document embeddings and scores queries in chunks. A TF-IDF + LinearSVC classifier predicts query category, while a cross-encoder reranks the most promising candidates jointly at the pair level. To avoid optimistic offline scores, the notebook tunes \code{top_k}, \code{top_m}, and category bonus on a stratified validation split, then retrains the cross-encoder on all labeled training queries before generating the final submission.''
 
 \section{A practical tuning checklist}
 
@@ -1026,10 +1423,12 @@ Not necessarily. With very large \(K\), precision can be numerically tiny while 
     \item Compare BM25+ against TF-IDF to isolate lexical improvements.
     \item Move to embeddings when semantic mismatch is the main failure mode.
     \item Cache document embeddings immediately.
-    \item Tune \code{top_k} for recall first, precision second.
-    \item Inspect whether category filtering removes useful documents or only noise.
+    \item Split labeled train queries into stratified train and validation subsets before tuning the cross-encoder.
+    \item Tune \code{top_k} for recall first, then tune \code{top_m} and category bonus for top-rank quality.
+    \item Inspect whether the category bonus helps ordering or overpowers relevance.
     \item Report Recall, Precision, MRR, and Accuracy together rather than in isolation.
     \item Reuse max-\(K\) results for smaller \(K\) sweeps when possible.
+    \item Retrain on all labeled training queries only after hyperparameters are fixed.
 \end{enumerate}
 
 \appendix
@@ -1118,7 +1517,958 @@ Do not read each formula as a block of symbols. First identify the \textbf{outpu
     \item \textbf{Read it as:} the final evaluation gives equal weight to retrieval coverage, retrieval cleanliness, ranking quality, and category prediction quality.
 \end{itemize}
 
-\section{Ten oral-exam questions with model answers}
+\section{Glossary from zero}
+
+\begin{termcard*}{Corpus}
+The full document collection the retriever searches over. In this project the corpus contains 216{,}041 technical forum documents.
+\end{termcard*}
+
+\begin{termcard*}{Query}
+The input problem statement or question for which the system must return relevant documents.
+\end{termcard*}
+
+\begin{termcard*}{Ground truth / qrels}
+The labeled relevance information telling us which documents are relevant for which train queries.
+\end{termcard*}
+
+\begin{termcard*}{First-stage retriever}
+The fast model that scans the whole corpus and returns a candidate set. Here that role is played by TF-IDF, BM25+, or the embedding retriever.
+\end{termcard*}
+
+\begin{termcard*}{Candidate set}
+The shortlist of documents kept after first-stage retrieval. In the notebook this is controlled by \code{top_k}.
+\end{termcard*}
+
+\begin{termcard*}{Reranker}
+A second-stage model that only inspects the candidate set and tries to improve local ordering at the top.
+\end{termcard*}
+
+\begin{termcard*}{Bi-encoder}
+A model that embeds the query and document separately and compares those vectors later. This is efficient for large-scale retrieval.
+\end{termcard*}
+
+\begin{termcard*}{Cross-encoder}
+A model that reads the query-document pair jointly and produces one relevance score for that pair.
+\end{termcard*}
+
+\begin{termcard*}{Hard negative}
+A non-relevant document that still looks plausible, often because the first-stage retriever ranked it highly.
+\end{termcard*}
+
+\begin{termcard*}{Hyperparameter}
+A setting chosen by the experimenter, such as \code{top_k}, \code{top_m}, or category bonus.
+\end{termcard*}
+
+\begin{termcard*}{Validation split}
+The held-out labeled subset used to compare settings honestly during development.
+\end{termcard*}
+
+\begin{termcard*}{Leakage}
+Any situation where information from evaluation data influences training or tuning and makes the measured score too optimistic.
+\end{termcard*}
+
+\begin{termcard*}{Stratified split}
+A split that preserves class proportions approximately, so each category remains represented in train and validation.
+\end{termcard*}
+
+\begin{termcard*}{Category bonus}
+A soft additive score that rewards query-document category agreement during reranking.
+\end{termcard*}
+
+\begin{termcard*}{Cache}
+Saved artifacts such as embeddings, vectorizers, or trained models that can be reused instead of recomputed.
+\end{termcard*}
+
+\section{A miniature end-to-end worked example}
+
+\workedbox{Why this appendix matters}{
+Many students understand each piece in isolation but still do not ``see the movie'' of the whole pipeline. This appendix gives a miniature notebook-aligned example with a tiny corpus so the stages can be followed from start to finish.}
+
+\subsection*{Step 1: tiny data}
+
+Imagine we have four documents:
+\begin{itemize}
+    \item \(d_1\): \code{android app crashes on startup}
+    \item \(d_2\): \code{android app freezes when loading images}
+    \item \(d_3\): \code{latex bibliography error after update}
+    \item \(d_4\): \code{python script slow on large files}
+\end{itemize}
+
+And two labeled train queries:
+\begin{itemize}
+    \item \(q_1\): \code{my android application crashes when opening}
+    \item \(q_2\): \code{latex references stopped compiling}
+\end{itemize}
+
+Suppose the ground truth says:
+\[
+q_1 \rightarrow \{d_1\}, \qquad q_2 \rightarrow \{d_3\}.
+\]
+
+\subsection*{Step 2: first-stage retrieval intuition}
+
+The embedding retriever might return, for \(q_1\),
+\[
+d_2,\ d_1,\ d_4,\ d_3.
+\]
+
+This is not crazy. Document \(d_2\) is semantically similar to \(q_1\) because it is also about Android app failure behavior, even though it is not the true labeled target for this toy example.
+
+\subsection*{Step 3: why reranking helps}
+
+Now suppose the cross-encoder assigns these pairwise scores:
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Document & Embedding order & Cross-encoder score \\
+\midrule
+\(d_2\) & 1 & 1.40 \\
+\(d_1\) & 2 & 2.20 \\
+\(d_4\) & 3 & 0.15 \\
+\(d_3\) & 4 & 0.02 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The reranker now promotes \(d_1\) above \(d_2\), which improves MRR because the first relevant document moves earlier.
+
+\subsection*{Step 4: add a category signal}
+
+Suppose the classifier predicts the category of \(q_1\) as \code{android}. If \(d_1\) and \(d_2\) are also \code{android}, they might each receive a bonus of \(+0.5\). If \(d_4\) is \code{programmers} and \(d_3\) is \code{tex}, they receive no bonus.
+
+The final scores become:
+\[
+d_1:2.70,\quad d_2:1.90,\quad d_4:0.15,\quad d_3:0.02.
+\]
+
+This bonus does not change the whole logic of relevance. It only reinforces a category-consistent ordering.
+
+\subsection*{Step 5: split train and validation honestly}
+
+In a real notebook, we do not want to train the cross-encoder on a query and then claim that the same query proves generalization. So we split the labeled queries:
+\begin{itemize}
+    \item train split: used to fit the cross-encoder,
+    \item validation split: used to tune \code{top_k}, \code{top_m}, and category bonus.
+\end{itemize}
+
+With only two toy queries, we would not get a meaningful validation split. But with 327 labeled queries, this becomes possible and important.
+
+\subsection*{Step 6: a simplified notebook-style code example}
+
+\begin{lstlisting}[caption={A simplified study version of the notebook pipeline}]
+# 1. Prepare the split
+ce_train_query_ids, val_query_ids = stratified_query_train_validation_split(
+    train_queries_df,
+    validation_fraction=0.2,
+    seed=42,
+)
+
+ce_train_queries_df = select_rows_by_ids(train_queries_df, ce_train_query_ids)
+val_queries_df = select_rows_by_ids(train_queries_df, val_query_ids)
+
+ce_train_ground_truth = subset_ground_truth(ground_truth, ce_train_query_ids)
+val_ground_truth = subset_ground_truth(ground_truth, val_query_ids)
+
+# 2. Train the reranker only on the train split
+validation_cross_encoder = build_or_load_cross_encoder(
+    train_queries_frame=ce_train_queries_df,
+    docs_frame=docs_df,
+    ground_truth=ce_train_ground_truth,
+)
+
+# 3. First-stage retrieval on validation queries
+base_results = run_retrieval(
+    model_name="embedding",
+    docs_frame=docs_df,
+    queries_frame=val_queries_df,
+    top_k=max(TUNING_TOP_KS),
+)
+
+# 4. Sweep hyperparameters on validation only
+for top_k in TUNING_TOP_KS:
+    for top_m in TUNING_RERANK_TOP_MS:
+        for bonus in TUNING_CATEGORY_BONUSES:
+            reranked = rerank_results_with_cross_encoder(
+                results=base_results,
+                query_frame=val_queries_df,
+                docs_frame=docs_df,
+                cross_encoder=validation_cross_encoder,
+                query_category_map=val_query_category_map,
+                doc_category_map=doc_category_map,
+                rerank_top_m=top_m,
+                category_bonus=bonus,
+            )
+            metrics = leaderboard_score(
+                truncate_results(reranked, top_k),
+                val_ground_truth,
+                k=top_k,
+                accuracy_value=validation_classifier_accuracy,
+            )
+
+# 5. Retrain on all labeled train queries only after choosing the best setting
+final_cross_encoder = build_or_load_cross_encoder(
+    train_queries_frame=train_queries_df,
+    docs_frame=docs_df,
+    ground_truth=ground_truth,
+)
+
+# 6. Generate the final test submission
+test_results = run_retrieval(... queries_frame=test_queries_df, top_k=best_top_k)
+test_results = rerank_results_with_cross_encoder(... cross_encoder=final_cross_encoder)
+write_kaggle_submission(test_results, ...)
+\end{lstlisting}
+
+\subsection*{How to read that code without panic}
+
+If the code looks long, reduce it to six questions:
+\begin{enumerate}
+    \item Where do we split train and validation?
+    \item Which subset is used to fit the cross-encoder?
+    \item Which subset is used to compare hyperparameters?
+    \item Where is the first-stage retriever called?
+    \item Where is the cross-encoder reranker called?
+    \item At what point do we retrain on all labeled train queries?
+\end{enumerate}
+
+If you can answer those six questions, then you understand the most important structure of the notebook.
+
+\section{Reading the cross-encoder notebook code from zero}
+
+\workedbox{Why this section exists}{
+Many students hear ``cross-encoder'' and imagine that a mysterious neural block is dropped into the notebook without explanation. The goal of this section is to slow the story down. We will connect the notebook functions to the exact learning problem they solve, show what one training pair looks like, and explain why the reranker can improve ranking even though it is trained with simple binary labels.}
+
+\subsection*{Question 1: what is the cross-encoder actually learning?}
+
+The cross-encoder is \textbf{not} learning whole-corpus retrieval directly. It is learning a smaller and more local task:
+\begin{quote}
+Given one query and one candidate document, should this pair receive a high relevance score or a low relevance score?
+\end{quote}
+
+That local decision is enough to improve ranking because the notebook uses the cross-encoder only on a shortlist. Once the first-stage retriever has already proposed plausible candidates, the reranker only has to answer:
+\begin{quote}
+Among these few candidates, which pair looks most relevant?
+\end{quote}
+
+This is why the cross-encoder can be trained with binary labels and still be useful for ranking. A ranking is just an ordering by score. If relevant pairs tend to get higher scores than non-relevant pairs, the ordering improves.
+
+\subsection*{Question 2: what does one training example look like?}
+
+Each training example is a pair plus a label:
+\begin{itemize}
+    \item positive pair: query ``android app crashes on startup'' with document ``my application crashes immediately after launch on android 14'' and label \(1\),
+    \item negative pair: query ``android app crashes on startup'' with document ``latex bibliography not showing with biblatex'' and label \(0\),
+    \item positive pair: query ``latex references stopped compiling'' with document ``biblatex error after package update'' and label \(1\),
+    \item negative pair: query ``latex references stopped compiling'' with document ``python loop over large files is slow'' and label \(0\).
+\end{itemize}
+
+So when you see notebook code that builds \code{InputExample(texts=[query_text, doc_text], label=1.0)} or label \(0.0\), do not let the object name scare you. It is just packaging one supervised example for the model.
+
+\subsection*{Question 3: what does the model ``see'' as input?}
+
+At the conceptual level, the model sees \emph{both texts together}. In many transformer implementations, this means something close to:
+\begin{asciibox}[title={Conceptual cross-encoder input}]
+[CLS] query tokens [SEP] document tokens [SEP]
+\end{asciibox}
+
+You do not need to memorize tokenizer details to understand the pipeline. The important idea is simpler:
+\begin{itemize}
+    \item a bi-encoder encodes each side separately,
+    \item a cross-encoder creates one joint representation for the whole pair.
+\end{itemize}
+
+That joint view lets the model notice interactions such as:
+\begin{itemize}
+    \item query word \code{startup} aligns with document phrase \code{after launch},
+    \item query phrase \code{references stopped compiling} aligns with document phrase \code{biblatex error after update},
+    \item one candidate uses the right technical vocabulary but the wrong category and context.
+\end{itemize}
+
+\subsection*{Question 4: what score comes out of the cross-encoder?}
+
+The model outputs one scalar for the pair. For teaching purposes, you can think of the flow as:
+\[
+\text{pair text} \longrightarrow f_\theta(q,d) \longrightarrow \hat{y}(q,d),
+\]
+where \(f_\theta(q,d)\) is a raw neural score and \(\hat{y}(q,d)\) is the interpreted relevance signal.
+
+Sometimes that score is treated like a logit, sometimes like a direct regression-style score, depending on the library setup. For the notebook-level understanding, the exact implementation detail is less important than the ordering rule:
+\begin{quote}
+larger score \(=\) this query-document pair looks more relevant.
+\end{quote}
+
+\subsection*{Question 5: why build both easy and hard negatives?}
+
+If every negative example were obviously wrong, the reranker would learn too little. It would become good at rejecting absurd mismatches, but not good at separating plausible near-misses.
+
+That is why the notebook mixes:
+\begin{itemize}
+    \item \textbf{easy or random negatives:} clearly unrelated documents,
+    \item \textbf{hard negatives:} documents that looked good to the first-stage retriever but are still not relevant.
+\end{itemize}
+
+\workedbox{A teaching analogy}{
+If you want to learn to distinguish identical twins, training only on photos of twins versus photos of bicycles will not help much. You also need difficult near-cases. Hard negatives are those near-cases for retrieval.}
+
+\subsection*{Question 6: how are hard negatives mined in plain English?}
+
+The notebook first uses a retrieval model to get a high-ranking candidate list for each labeled query. Then it removes the truly relevant documents and keeps some of the remaining top-ranked wrong documents as hard negatives.
+
+The logic looks like this:
+\begin{enumerate}
+    \item take one labeled query,
+    \item run the fast retriever,
+    \item collect top-ranked documents,
+    \item remove the documents listed in ground truth,
+    \item keep some of the surviving documents as difficult wrong examples.
+\end{enumerate}
+
+Here is a tiny illustration:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Rank from fast retriever & Document & Relevant? & Use as hard negative? \\
+\midrule
+1 & \(d_{17}\) & yes & no \\
+2 & \(d_{204}\) & no & yes \\
+3 & \(d_{88}\) & no & yes \\
+4 & \(d_{310}\) & yes & no \\
+5 & \(d_{415}\) & no & maybe \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This table is important because it shows that hard negatives are not random from the whole corpus. They are selected from \emph{the retriever's own mistakes}.
+
+\subsection*{Question 7: what does the pair-building code mean line by line?}
+
+When the notebook calls helper functions such as \code{build_text_map}, \code{mine_hard_negative_doc_ids}, and \code{build_cross_encoder_training_examples}, here is the conceptual translation:
+\begin{itemize}
+    \item \code{build_text_map(...)}: create a lookup table from ids to the final text string that will be fed to models.
+    \item \code{mine_hard_negative_doc_ids(...)}: ask the first-stage retriever for plausible but wrong documents.
+    \item \code{build_cross_encoder_training_examples(...)}: turn positive and negative pairs into supervised examples.
+    \item \code{DataLoader(...)}: group many examples into batches for efficient training.
+    \item \code{cross_encoder.fit(...)}: update the neural weights so positive pairs tend to score above negative pairs.
+\end{itemize}
+
+\subsection*{Question 8: what is the loss function doing without too much math?}
+
+During training, the model compares its current prediction to the known label:
+\begin{itemize}
+    \item if a positive pair gets a low score, the loss says ``increase this'',
+    \item if a negative pair gets a high score, the loss says ``decrease this''.
+\end{itemize}
+
+After many batches, the model gradually reshapes its parameters so the score surface separates relevant and non-relevant pairs better.
+
+If you want one compact formula, a common mental model is binary cross-entropy:
+\[
+\mathcal{L}(q,d,y) = -y\log \hat{y} - (1-y)\log(1-\hat{y}),
+\]
+where \(y\in\{0,1\}\). But the main thing to understand is not the formula itself. The main thing is:
+\begin{quote}
+training repeatedly punishes the model when it gives the wrong relative signal to a pair.
+\end{quote}
+
+\subsection*{Question 9: why can a binary pair model improve a ranked list?}
+
+Suppose the first-stage retriever returns five candidates. The cross-encoder scores them like this:
+\[
+2.2,\ 1.7,\ 0.9,\ 0.2,\ -0.1
+\]
+Those numbers do not need to be probabilities. They only need to be \emph{comparable}. Sorting by them gives a better local ranking if relevant candidates usually rise above non-relevant ones.
+
+So the reranking rule is extremely simple:
+\begin{quote}
+take the candidate list, rescore candidate pairs, and sort again by the new score.
+\end{quote}
+
+\subsection*{Question 10: a notebook-style code reading example}
+
+\begin{lstlisting}[caption={Study version of the cross-encoder training block}]
+query_text_map = build_text_map(ce_train_queries_df)
+doc_text_map = build_text_map(docs_df)
+
+hard_negative_doc_ids_by_query = mine_hard_negative_doc_ids(
+    train_queries_frame=ce_train_queries_df,
+    docs_frame=docs_df,
+    ground_truth=ce_train_ground_truth,
+    query_ids=ce_train_query_ids,
+    top_k=CROSS_ENCODER_HARD_NEGATIVE_TOP_K,
+)
+
+training_examples = build_cross_encoder_training_examples(
+    query_text_map=query_text_map,
+    doc_text_map=doc_text_map,
+    ground_truth=ce_train_ground_truth,
+    query_ids=ce_train_query_ids,
+    max_positives_per_query=4,
+    negatives_per_positive=4,
+    hard_negative_doc_ids_by_query=hard_negative_doc_ids_by_query,
+)
+
+train_loader = DataLoader(training_examples, shuffle=True, batch_size=16)
+cross_encoder.fit(train_dataloader=train_loader, epochs=5)
+\end{lstlisting}
+
+Read it in slow motion:
+\begin{enumerate}
+    \item Convert tables into text lookups.
+    \item Mine difficult wrong answers for each training query.
+    \item Build labeled pairs.
+    \item Put those pairs into batches.
+    \item Train for several passes through the data.
+\end{enumerate}
+
+\subsection*{Question 11: what should you remember most?}
+
+If the variable names still feel intimidating, reduce the whole cross-encoder block to one sentence:
+\begin{quote}
+The notebook collects good and bad query-document pairs, then trains a joint pair-scoring model so that relevant candidates rise to the top of a shortlist.
+\end{quote}
+
+\section{A worked validation and tuning simulation}
+
+\workedbox{Why this section matters}{
+Validation is often described in one sentence, but the real difficulty is understanding what changes across experiments and what must stay fixed. This section gives a slow notebook-style simulation of model selection so you can see how \code{top_k}, \code{top_m}, and category bonus are tuned without leakage.}
+
+\subsection*{Step 1: create one honest split}
+
+Imagine the 327 labeled queries are divided into:
+\begin{itemize}
+    \item 261 cross-encoder training queries,
+    \item 66 validation queries.
+\end{itemize}
+
+The exact counts can vary slightly depending on the split function, but the core rule stays the same:
+\begin{quote}
+training queries are for fitting, validation queries are for choosing settings.
+\end{quote}
+
+\subsection*{Step 2: train only on the cross-encoder train fold}
+
+The reranker is fit using only the 261 training queries and their relevant documents. The 66 validation queries are untouched during fitting.
+
+At this point, if you are reading the notebook, you should ask yourself one simple safety question:
+\begin{quote}
+Did the model see these validation query ids during training pair construction?
+\end{quote}
+
+If the answer is no, the protocol is still honest.
+
+\subsection*{Step 3: run the expensive first stage only once at the largest needed depth}
+
+Suppose you want to compare:
+\[
+\code{top_k} \in \{1000, 3000, 5000\}.
+\]
+Instead of rerunning retrieval three times separately, the notebook can retrieve once at:
+\[
+\max(\code{top_k}) = 5000
+\]
+and then truncate the result list to 1000 or 3000 when needed.
+
+This is both efficient and conceptually clean:
+\begin{itemize}
+    \item retrieve once,
+    \item reuse the same base ranking,
+    \item compare settings fairly.
+\end{itemize}
+
+\subsection*{Step 4: sweep the reranking depth and category bonus}
+
+Now suppose we also try:
+\[
+\code{top_m} \in \{20, 50, 100\}, \qquad
+\code{category bonus} \in \{0.0, 0.2, 0.5\}.
+\]
+
+Then the validation loop is exploring combinations such as:
+\begin{itemize}
+    \item retrieve 5000, rerank 20, no bonus,
+    \item retrieve 5000, rerank 50, bonus \(0.2\),
+    \item retrieve 3000, rerank 100, bonus \(0.5\).
+\end{itemize}
+
+Each combination defines one candidate system.
+
+\subsection*{Step 5: read a tuning table like a researcher}
+
+Here is a fully hypothetical validation table:
+\begin{center}
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+\code{top_k} & \code{top_m} & bonus & Avg.\ score & Interpretation \\
+\midrule
+1000 & 20 & 0.0 & 0.281 & shortlist is small; reranking light \\
+1000 & 50 & 0.2 & 0.289 & reranking helps a bit \\
+3000 & 20 & 0.2 & 0.301 & more recall from first stage \\
+3000 & 50 & 0.2 & 0.309 & stronger balance \\
+5000 & 50 & 0.2 & 0.311 & small gain from deeper retrieval \\
+5000 & 100 & 0.5 & 0.307 & too much extra reranking/bonus \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+What should a student learn from such a table?
+\begin{itemize}
+    \item increasing \code{top_k} can help recall,
+    \item increasing \code{top_m} can help ordering,
+    \item too much category bonus can start to distort relevance,
+    \item the best setting is not the one with the biggest component value but the one with the best validation score.
+\end{itemize}
+
+\subsection*{Step 6: why the best setting is chosen on validation only}
+
+Suppose the best row is:
+\[
+\code{top_k}=5000,\quad \code{top_m}=50,\quad \text{bonus}=0.2.
+\]
+
+That decision must come from validation, not from the final test set and not from the full 327 queries after the reranker has already seen them all.
+
+This is exactly what validation is protecting:
+\begin{quote}
+it separates \emph{system design} from \emph{final test-time use}.
+\end{quote}
+
+\subsection*{Step 7: what the notebook stores as \code{best\_experiment}}
+
+When you see a variable like \code{best_experiment}, read it as:
+\begin{quote}
+the best-performing hyperparameter configuration on the held-out validation queries.
+\end{quote}
+
+It is usually a dictionary or record containing things like:
+\begin{itemize}
+    \item the retrieval model name,
+    \item chosen \code{top_k},
+    \item chosen \code{top_m},
+    \item chosen category bonus,
+    \item metric values measured on validation.
+\end{itemize}
+
+So \code{best_experiment} is not ``the final Kaggle score.'' It is the notebook's memory of which development setting won the honest comparison.
+
+\subsection*{Step 8: why retraining after tuning is not leakage}
+
+Students often worry here: if we retrain on all 327 queries after tuning, did we break the protocol again?
+
+The answer is:
+\begin{itemize}
+    \item \textbf{No, for submission generation:} this is normal and correct.
+    \item \textbf{Yes, if you then report a new offline score on those same 327 queries as if it were fair.}
+\end{itemize}
+
+So the rule is:
+\begin{quote}
+retrain on all labeled queries to produce the strongest final submission, but keep the reported development comparison on the validation split.
+\end{quote}
+
+\subsection*{Step 9: a notebook-style validation loop}
+
+\begin{lstlisting}[caption={Study version of a leakage-safe tuning loop}]
+base_results = run_retrieval(
+    model_name="embedding",
+    docs_frame=docs_df,
+    queries_frame=val_queries_df,
+    top_k=max(TUNING_TOP_KS),
+)
+
+experiments = []
+for top_k in TUNING_TOP_KS:
+    truncated_results = truncate_results(base_results, top_k)
+    for top_m in TUNING_RERANK_TOP_MS:
+        for bonus in TUNING_CATEGORY_BONUSES:
+            reranked_results = rerank_results_with_cross_encoder(
+                results=truncated_results,
+                query_frame=val_queries_df,
+                docs_frame=docs_df,
+                cross_encoder=validation_cross_encoder,
+                rerank_top_m=top_m,
+                category_bonus=bonus,
+            )
+            metrics = leaderboard_score(
+                reranked_results,
+                val_ground_truth,
+                k=top_k,
+                accuracy_value=validation_classifier_accuracy,
+            )
+            experiments.append({
+                "top_k": top_k,
+                "top_m": top_m,
+                "bonus": bonus,
+                "avg_score": metrics["score"],
+            })
+
+best_experiment = max(experiments, key=lambda row: row["avg_score"])
+\end{lstlisting}
+
+\subsection*{Step 10: how to read that loop without panic}
+
+There are only four ideas inside this code:
+\begin{enumerate}
+    \item get one base candidate ranking on validation queries,
+    \item try several truncation depths,
+    \item try several reranking and bonus settings,
+    \item keep the configuration with the best validation score.
+\end{enumerate}
+
+\subsection*{Step 11: what mistakes this protocol prevents}
+
+This protocol protects against several common notebook mistakes:
+\begin{itemize}
+    \item training and evaluating on the same labeled queries,
+    \item selecting \code{top_m} by repeatedly inspecting the same training examples,
+    \item claiming a final post-retraining train score as if it were an honest development estimate,
+    \item comparing systems that were not evaluated on the same held-out subset.
+\end{itemize}
+
+\subsection*{Step 12: the one-sentence summary}
+
+If you need one sentence for memory, use this:
+\begin{quote}
+Validation is the notebook's protected decision zone: all hyperparameter choices are made there before the final reranker is retrained on all labeled data for submission.
+\end{quote}
+
+\section{Notebook variable names translated into plain English}
+
+\workedbox{Why students need this}{
+Many notebook readers are blocked not by machine learning itself but by naming density. DataFrame names, cached objects, score maps, and helper outputs can look overwhelming. This section translates the most important variable names into ordinary language.}
+
+\subsection*{The core dataset objects}
+
+\begin{itemize}
+    \item \code{docs_df}: the documents table, which is the big searchable corpus.
+    \item \code{train_queries_df}: the labeled queries table, which contains the 327 training queries with known relevant documents.
+    \item \code{test_queries_df}: the unlabeled query table, which contains the Kaggle queries for which the notebook must predict results.
+    \item \code{ground_truth}: the relevance mapping, which acts as the answer key for train queries only.
+    \item \code{doc_texts} or text map: the final document strings built from title, body, and tags.
+    \item \code{query_texts} or text map: the final query strings after shared preprocessing.
+    \item \code{doc_category_map}: the mapping from document id to its known forum category.
+\end{itemize}
+
+\subsection*{The split-related objects}
+
+\begin{itemize}
+    \item \code{ce_train_query_ids}: the training query ids that are allowed to teach the cross-encoder.
+    \item \code{val_query_ids}: the validation query ids reserved for honest system comparison.
+    \item \code{ce_train_queries_df}: the train slice of the 327 labeled queries.
+    \item \code{val_queries_df}: the held-out slice used for tuning.
+    \item \code{ce_train_ground_truth}: the relevance labels for the reranker's training fold only.
+    \item \code{val_ground_truth}: the relevance labels for the tuning fold only.
+\end{itemize}
+
+\subsection*{The retrieval and reranking objects}
+
+\begin{itemize}
+    \item \code{embedding_model}: the sentence-transformer retriever used as the fast semantic candidate generator.
+    \item \code{cross_encoder}: the slower pair-scoring reranker that judges query-document pairs jointly.
+    \item \code{validation_cross_encoder}: the fold-specific reranker trained only on the train split for honest tuning.
+    \item \code{final_cross_encoder}: the reranker retrained on all 327 labeled queries after tuning.
+    \item \code{base_results}: the candidate lists returned before reranking.
+    \item \code{reranked_results}: the same candidate lists after pairwise rescoring and sorting.
+    \item \code{hard_negative_doc_ids_by_query}: wrong documents that still looked plausible for each train query.
+    \item \code{training_examples}: the positive and negative query-document examples used to fit the reranker.
+\end{itemize}
+
+\subsection*{The category-related objects}
+
+\begin{itemize}
+    \item \code{category_vectorizer}: the TF-IDF feature builder for the classifier.
+    \item \code{category_classifier}: the \code{LinearSVC} model that predicts forum category from query text.
+    \item \code{train_query_category_map}: the category labels attached to training queries.
+    \item \code{val_query_category_map}: the category labels used while tuning on the held-out fold.
+    \item \code{predicted_test_categories}: the classifier's guesses for the unlabeled Kaggle queries.
+\end{itemize}
+
+\subsection*{The tuning and experiment objects}
+
+\begin{itemize}
+    \item \code{TUNING_TOP_KS}: the candidate values of \code{top_k} the notebook will compare.
+    \item \code{TUNING_RERANK_TOP_MS}: the candidate values of \code{top_m} the notebook will compare.
+    \item \code{TUNING_CATEGORY_BONUSES}: the candidate category bonus strengths the notebook will compare.
+    \item \code{experiments}: the notebook's record of every configuration tested on validation.
+    \item \code{best_experiment}: the best-performing row from that experiment table.
+    \item \code{metrics}: the evaluation outputs such as Recall, Precision, MRR, Accuracy, and the combined score.
+\end{itemize}
+
+\subsection*{How to read a notebook cell when you feel lost}
+
+When you open a dense code cell, do not try to understand every line at once. Use this four-question method:
+\begin{enumerate}
+    \item Which objects are inputs?
+    \item Which new object is being created?
+    \item Is this a training step, an evaluation step, or a cache-loading step?
+    \item Which conceptual stage of the pipeline does this belong to?
+\end{enumerate}
+
+For example, if you see:
+\begin{lstlisting}[caption={A tiny code-reading exercise}]
+reranked_results = rerank_results_with_cross_encoder(
+    results=base_results,
+    query_frame=val_queries_df,
+    docs_frame=docs_df,
+    cross_encoder=validation_cross_encoder,
+    rerank_top_m=50,
+    category_bonus=0.2,
+)
+\end{lstlisting}
+
+you can translate it into plain English as:
+\begin{quote}
+Take the validation candidate lists, let the validation-trained reranker rescore only the top 50 documents per query, add a small category bonus where appropriate, and return the new sorted rankings.
+\end{quote}
+
+\subsection*{How to classify notebook cells by role}
+
+Almost every important cell in the notebook falls into one of these roles:
+\begin{itemize}
+    \item \textbf{data preparation:} load tables, check ids, build text,
+    \item \textbf{representation building:} vectorizer fitting or embedding computation,
+    \item \textbf{model fitting:} classifier or cross-encoder training,
+    \item \textbf{retrieval execution:} generate candidate rankings,
+    \item \textbf{reranking execution:} rescore top candidates,
+    \item \textbf{evaluation and tuning:} compute metrics and compare settings,
+    \item \textbf{final submission:} retrain on all labels and write the Kaggle file.
+\end{itemize}
+
+If you can assign each code cell to one of these roles, the notebook stops looking like random Python and starts looking like a system.
+
+\subsection*{A compact translation exercise}
+
+Here is a tiny block:
+\begin{lstlisting}[caption={Translate the code into the pipeline story}]
+ce_train_queries_df = select_rows_by_ids(train_queries_df, ce_train_query_ids)
+val_queries_df = select_rows_by_ids(train_queries_df, val_query_ids)
+
+validation_cross_encoder = build_or_load_cross_encoder(
+    train_queries_frame=ce_train_queries_df,
+    docs_frame=docs_df,
+    ground_truth=ce_train_ground_truth,
+)
+\end{lstlisting}
+
+The plain-English translation is:
+\begin{enumerate}
+    \item split the labeled training queries into a fitting subset and a held-out subset,
+    \item train the reranker only on the fitting subset,
+    \item keep the held-out subset clean for honest tuning.
+\end{enumerate}
+
+\subsection*{The one rule that simplifies almost everything}
+
+Whenever a variable name looks abstract, ask:
+\begin{quote}
+Is this variable storing data, a model, a score list, or a chosen setting?
+\end{quote}
+
+That one question is enough to decode a surprising amount of notebook structure.
+
+\section{One query's journey through the full notebook pipeline}
+
+\workedbox{Why this final appendix helps}{
+The best way to understand a retrieval system is often to follow one query from beginning to end. This section tells the whole story of one query as it moves through preprocessing, first-stage retrieval, reranking, category adjustment, and metric evaluation.}
+
+\subsection*{Stage 1: raw query text enters the notebook}
+
+Suppose the user query is:
+\begin{quote}
+\code{android application crashes immediately after startup}
+\end{quote}
+
+At this moment, the notebook has not done retrieval yet. It first needs to build the same kind of cleaned text representation used throughout the project.
+
+\subsection*{Stage 2: preprocessing and text construction}
+
+The query is normalized using the shared preprocessing policy. Depending on the notebook configuration, this may include:
+\begin{itemize}
+    \item lowercasing,
+    \item punctuation normalization,
+    \item whitespace cleanup,
+    \item shared title/body formatting.
+\end{itemize}
+
+The important conceptual rule is:
+\begin{quote}
+the query should be processed in a way that is compatible with how document texts were built.
+\end{quote}
+
+\subsection*{Stage 3: optional category prediction}
+
+The category classifier reads the query text and predicts a forum domain, for example:
+\[
+\widehat{\mathrm{category}}(q)=\texttt{android}.
+\]
+
+Nothing is filtered yet. The prediction is simply stored because later it may add a soft bonus to category-consistent documents.
+
+\subsection*{Stage 4: dense first-stage retrieval}
+
+The embedding model converts the query into a vector \(e(q)\). Each document already has a stored vector \(e(d)\) from a previous encoding step. The notebook computes similarities such as:
+\[
+\mathrm{sim}(q,d)=\cos(e(q), e(d)).
+\]
+
+Imagine the top results after this fast stage are:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Document & Category & Dense similarity & Kept in top-\(K\)? \\
+\midrule
+\(d_1\) & android & 0.88 & yes \\
+\(d_2\) & programmers & 0.85 & yes \\
+\(d_3\) & android & 0.83 & yes \\
+\(d_4\) & unix & 0.79 & yes \\
+\(d_5\) & tex & 0.76 & yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The notebook may keep thousands of documents at this stage, but the table above is enough to understand the flow.
+
+\subsection*{Stage 5: select the top-\(m\) for reranking}
+
+From the larger top-\(K\) pool, the notebook keeps only the top-\(m\) documents for expensive pairwise rescoring. If \code{top_m=3}, then only:
+\[
+d_1,\ d_2,\ d_3
+\]
+are passed to the cross-encoder.
+
+This stage is crucial because it controls computational budget. The system is saying:
+\begin{quote}
+I will inspect only the most promising candidates carefully.
+\end{quote}
+
+\subsection*{Stage 6: build query-document pair texts}
+
+For each selected candidate, the notebook forms a pair:
+\begin{itemize}
+    \item pair 1: \((q,d_1)\),
+    \item pair 2: \((q,d_2)\),
+    \item pair 3: \((q,d_3)\).
+\end{itemize}
+
+Conceptually, the model now receives three separate questions:
+\begin{itemize}
+    \item how relevant is \(d_1\) to this exact query?
+    \item how relevant is \(d_2\) to this exact query?
+    \item how relevant is \(d_3\) to this exact query?
+\end{itemize}
+
+\subsection*{Stage 7: cross-encoder rescoring}
+
+Suppose the cross-encoder outputs:
+\[
+\mathrm{cross}(q,d_1)=1.9,\quad
+\mathrm{cross}(q,d_2)=1.1,\quad
+\mathrm{cross}(q,d_3)=2.3.
+\]
+
+Now the local order changes. Before reranking, \(d_1\) was above \(d_3\). After reranking, \(d_3\) moves above \(d_1\).
+
+This is the whole point of the second stage:
+\begin{quote}
+the cross-encoder corrects local ordering mistakes made by the faster first-stage retriever.
+\end{quote}
+
+\subsection*{Stage 8: apply the category bonus}
+
+Suppose the predicted query category is \code{android}, and \(d_1\) and \(d_3\) are also \code{android}, while \(d_2\) is \code{programmers}. If the category bonus is \(0.2\), then the final scores become:
+\[
+d_1: 1.9 + 0.2 = 2.1,
+\]
+\[
+d_2: 1.1 + 0.0 = 1.1,
+\]
+\[
+d_3: 2.3 + 0.2 = 2.5.
+\]
+
+The final order is:
+\[
+d_3 \succ d_1 \succ d_2.
+\]
+
+\subsection*{Stage 9: merge reranked and untouched candidates}
+
+Only the reranked prefix changes. The rest of the larger top-\(K\) list stays behind it in the original order unless the notebook explicitly rebuilds the whole list around the reranked prefix.
+
+So the returned ranking is often conceptually:
+\begin{itemize}
+    \item reranked top-\(m\),
+    \item then the remaining candidates from positions \(m+1\) to \(K\).
+\end{itemize}
+
+\subsection*{Stage 10: compare the final ranking to ground truth}
+
+If this is a validation query, the notebook can compare the ranked results to the known relevant document set. Suppose the true relevant set is:
+\[
+R_q = \{d_3, d_7\}.
+\]
+
+If the final top-5 list starts with:
+\[
+d_3,\ d_1,\ d_2,\ d_{11},\ d_7,
+\]
+then:
+\begin{itemize}
+    \item Recall@5 is \(2/2=1.0\) because both relevant documents were recovered,
+    \item Precision@5 is \(2/5=0.4\) because two of the five are relevant,
+    \item reciprocal rank is \(1/1=1.0\) because the first relevant document is at rank 1.
+\end{itemize}
+
+\subsection*{Stage 11: where validation matters in this story}
+
+If this query belonged to the cross-encoder training fold, then using it to judge the tuned system would be optimistic. If it belongs to the validation fold instead, then it is doing the right job:
+\begin{quote}
+it is helping us estimate how well the tuned system behaves on unseen labeled queries.
+\end{quote}
+
+\subsection*{Stage 12: where the Kaggle submission differs}
+
+For test queries, the story is almost the same except for one key difference:
+\begin{itemize}
+    \item we do not have ground truth labels,
+    \item so the notebook cannot compute Recall, Precision, or MRR,
+    \item it can only output the final ranked document ids.
+\end{itemize}
+
+That is why the test set is for submission, not for development decisions.
+
+\subsection*{A complete story in compact pseudocode}
+
+\begin{lstlisting}[caption={One query moving through the pipeline}]
+query_text = normalize_text(raw_query)
+predicted_query_category = category_classifier.predict([query_text])[0]
+
+candidate_results = embedding_retrieve(
+    query_text=query_text,
+    docs_frame=docs_df,
+    top_k=best_top_k,
+)
+
+reranked_results = rerank_results_with_cross_encoder(
+    results=candidate_results,
+    query_frame=single_query_df,
+    docs_frame=docs_df,
+    cross_encoder=final_cross_encoder,
+    rerank_top_m=best_top_m,
+    category_bonus=best_category_bonus,
+    query_category_map={query_id: predicted_query_category},
+    doc_category_map=doc_category_map,
+)
+
+top_doc_ids = extract_doc_ids(reranked_results)
+\end{lstlisting}
+
+\subsection*{What to remember from the journey}
+
+If you remember only one image, remember this:
+\begin{quote}
+one query first enters a fast semantic search stage, then a slower pairwise judgment stage, then a small category-aware adjustment stage, and only after that becomes a final ranked answer list.
+\end{quote}
+
+\section{Fifteen oral-exam questions with model answers}
 
 \begin{enumerate}
     \item \textbf{Why is TF-IDF sparse?} Because each vector has one dimension per vocabulary item, and most terms are absent from a given document.
@@ -1126,16 +2476,21 @@ Do not read each formula as a block of symbols. First identify the \textbf{outpu
     \item \textbf{Why are embeddings useful here?} Because relevant technical documents may use different wording from the query, and dense embeddings are more robust to paraphrase.
     \item \textbf{Why not submit TF-IDF if it is simpler?} Because a simple baseline is valuable for comparison, but the final choice should follow empirical performance on the task.
     \item \textbf{Why use a category classifier?} To estimate the topical region of the query and reduce cross-category noise in deep rankings.
-    \item \textbf{What does the dominant-category filter assume?} It assumes the category composition of the top retrieval window is informative enough to guide pruning of later results.
+    \item \textbf{What is the difference between a bi-encoder and a cross-encoder?} A bi-encoder embeds query and document separately for fast large-scale retrieval, while a cross-encoder scores the pair jointly for more accurate reranking.
+    \item \textbf{Why not run the cross-encoder on the whole corpus?} Because pairwise joint scoring is much slower than vector similarity search, so it is practical only on a shortlist of candidates.
+    \item \textbf{What does \code{top_m} mean?} It is the number of top candidates from first-stage retrieval that are actually reranked by the cross-encoder.
+    \item \textbf{What is a hard negative?} A document that is not relevant but looks plausible, often because the first-stage retriever ranked it highly.
+    \item \textbf{Why is a validation split necessary here?} Because tuning or evaluating on the same labeled queries used for cross-encoder fitting would produce optimistic scores due to leakage.
+    \item \textbf{Why stratify the split by category?} To keep category proportions similar in train and validation so the validation score remains representative across the five forum domains.
+    \item \textbf{Why retrain on all 327 labeled queries after tuning?} Once the best hyperparameters are fixed, using all available training labels gives the final submission model the strongest possible training signal.
     \item \textbf{Why is precision small when \(K\) is large?} Because the denominator includes many returned documents; even strong recall can coexist with low precision at large \(K\).
-    \item \textbf{Why cache embeddings?} Because document encoding is expensive and does not need to be repeated every run.
-    \item \textbf{Why use query chunking?} To control memory usage during dense scoring.
-    \item \textbf{Why use partial sorting?} Because you only need the top part of the ranking, not a full exact sort of all scores.
+    \item \textbf{Why cache embeddings and trained models?} Because document encoding and reranker loading are expensive and do not need to be repeated every run.
+    \item \textbf{Why use query chunking and partial sorting?} Query chunking controls memory usage during dense scoring, and partial sorting avoids an unnecessary full sort when only the top part of the ranking is needed.
 \end{enumerate}
 
 \section{Final takeaway}
 
 \workedbox{What you should remember most}{
-This project is not just ``TF-IDF versus BM25 versus embeddings.'' It is a full retrieval system. The final notebook combines semantic first-stage retrieval, sparse linear category prediction, category-aware post-filtering, and strong runtime engineering. The best way to describe it academically is: \emph{a cache-aware hybrid retrieval pipeline with dense semantic ranking and lightweight categorical control}.}
+This project is not just ``TF-IDF versus BM25 versus embeddings.'' It is a full retrieval system with an honest development protocol. The final notebook combines semantic first-stage retrieval, cross-encoder reranking, lightweight category-aware score adjustment, stratified validation-based tuning, final retraining on all labeled training queries, and strong runtime engineering. The best academic description is: \emph{a cache-aware two-stage retrieval pipeline with dense candidate generation, pairwise reranking, lightweight category priors, and leakage-safe validation}.}
 
 \end{document}
