@@ -1,6 +1,6 @@
 # Retrieval Engine Competition Project
 
-**Group:** SeaFour — Kaggle Retrieval Engine Competition
+**Group:** SeaFour - Kaggle Retrieval Engine Competition
 
 ## Team
 
@@ -10,35 +10,36 @@
 
 ## Overview
 
-Notebook-first submission workflow implementing four retrieval methods:
+This project is a notebook-first retrieval pipeline with:
+- dense first-stage retrieval (`embedding`, Sentence-Transformer)
+- optional lexical baselines (`tfidf`, `bm25`)
+- TF-IDF + LinearSVC query category classifier
+- cross-encoder second-stage reranking
+- Kaggle CSV generation
 
-| Method | Type | Description |
-|--------|------|-------------|
-| **TF-IDF** | Sparse lexical | Unigram+bigram vectoriser, cosine similarity |
-| **BM25+** | Sparse lexical | Probabilistic ranking with length normalisation |
-| **Embedding** | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`) |
-| **Hybrid** | Sparse + Dense | BM25+ candidates → embedding re-ranking with score fusion |
-
-The submission notebook focuses on generating the Kaggle CSV; offline evaluation (Precision/Recall/MRR/Accuracy) can be run separately if needed.
+The current active default path is:
+1. `embedding` first-stage retrieval (`top_k=7500`)
+2. cross-encoder rerank of top candidates (`top_m=30`)
+3. category-aware soft bonus during reranking
+4. final CSV export
 
 ## Structure
 
 ```text
 retrieval_project/
-├── data/                              # competition data (not committed)
-│   ├── docs.json                      # 216,041 documents
-│   ├── queries_train.json             # 327 training queries
-│   ├── queries_test.json              # 141 test queries
-│   ├── qgts_train.json                # training ground truth
-│   └── submission.csv                 # sample submission template
+├── data/                                   # competition data (not committed)
+│   ├── docs.json
+│   ├── queries_train.json
+│   ├── queries_test.json
+│   ├── qgts_train.json
+│   └── submission.csv
 ├── kaggle/
-│   ├── kaggle_submission.ipynb        # submission notebook
-│   └── solutions_SeaFour.csv          # generated submission CSV
+│   └── kaggle-submission.ipynb             # main notebook
 ├── reports/
-│   ├── retrieval_project_report.tex   # LaTeX source (XeLaTeX)
-│   └── retrieval_project_report.pdf   # compiled report
+│   ├── retrieval_project_report_updated.tex
+│   └── retrieval_project_report_updated.pdf
+├── PIPELINE.md
 ├── requirements.txt
-├── PIPELINE.md                        # pipeline documentation
 └── README.md
 ```
 
@@ -52,32 +53,36 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-1. Place competition data files in `data/`.
-2. Open `kaggle/kaggle_submission.ipynb`.
+1. Put competition files in `data/`.
+2. Open `kaggle/kaggle-submission.ipynb`.
 3. Run all cells.
 
-The notebook auto-detects `/kaggle/input` first, then falls back to `../data`
-(or `data/` if you launch Jupyter from the repo root).
+Runtime path detection:
+- Kaggle: `/kaggle/input/competitions/retrieval-engine-competition`
+- Colab: mounted Google Drive project folder
+- Local: nearest `data/` from current working directory
 
-## Configuration
+## Key Configuration (Notebook Defaults)
 
-| Parameter | Default | Options |
-|-----------|---------|--------|
-| `MODEL_NAME` | `bm25` | `bm25`, `tfidf`, `embedding_hybrid` |
-| `TOP_K` | `100` | documents per query |
-| `HYBRID_CANDIDATE_K` | `200` | candidates before embedding rerank |
-| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformer model |
-| `EMBEDDING_BATCH_SIZE` | `128` | embedding batch size |
-| `OUTPUT_PATH` | `kaggle/solutions_SeaFour.csv` | output CSV location |
+| Parameter | Default |
+|-----------|---------|
+| `FINAL_MODEL` | `embedding` |
+| `EVALUATION_MODELS` | `("embedding",)` |
+| `EVALUATION_TOP_KS` | `[7500]` |
+| `SUBMIT_TOP_K` | `7500` |
+| `ENABLE_CROSS_ENCODER_RERANK` | `True` |
+| `CROSS_ENCODER_RERANK_TOP_M` | `30` |
+| `ENABLE_CATEGORY_FILTER` | `True` (soft bonus in reranking) |
+| `STOPWORD_FILTER_ENABLED` | `True` |
+| `STOPWORD_LANGUAGE` | `"english"` |
 
-## Report
+## Outputs
 
-- Source: `reports/retrieval_project_report.tex`
-- PDF: `reports/retrieval_project_report.pdf`
+- Submission CSV: `solutions_SeaFour.csv`
+- Report source: `reports/retrieval_project_report_updated.tex`
+- Report PDF: `reports/retrieval_project_report_updated.pdf`
 
-Build manually:
-```bash
-cd reports && xelatex -interaction=nonstopmode retrieval_project_report.tex
-```
+## Notes
 
-With VS Code LaTeX Workshop, the PDF auto-builds on every save.
+- A strict dominant-category filtering function is still implemented, but the active run uses soft category bonus inside cross-encoder reranking.
+- Cross-encoder training/inference is the most expensive stage; caching is enabled in the notebook.

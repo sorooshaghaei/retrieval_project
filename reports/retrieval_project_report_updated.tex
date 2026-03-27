@@ -83,7 +83,7 @@ Nguyen Ho Bao KHANH \\
 
 \begin{tikzpicture}[x=1cm,y=1cm,>=Latex]
   \node[draw=ink, rounded corners=5pt, fill=softblue, text width=13.7cm, minimum height=4.0cm, align=left, inner sep=10pt] (box) at (0,0) {
-  \textbf{Report objective.} This version updates the written report to precisely match our experimental progression and the current saved notebook. We detail our journey from TF-IDF and BM25+ baselines to a robust dense embedding retriever. The active configuration evaluates and submits only the embedding retriever, combined with a TF-IDF + LinearSVC category classifier and a dominant-category post-filter.\\[0.25cm]
+  \textbf{Report objective.} This version updates the written report to precisely match our experimental progression and the current saved notebook. We detail our journey from TF-IDF and BM25+ baselines to a robust dense embedding retriever. The active configuration uses embedding first-stage retrieval, cross-encoder second-stage reranking, and a TF-IDF + LinearSVC category classifier used as a soft category prior.\\[0.25cm]
   \textbf{Primary source files.} \texttt{kaggle-submission.ipynb}, \texttt{solutions\_SeaFour.csv}, and this \LaTeX\ report.};
 \end{tikzpicture}
 
@@ -93,7 +93,7 @@ Nguyen Ho Bao KHANH \\
 Notebook file & \texttt{kaggle-submission.ipynb} \\
 Submission file & \texttt{solutions\_SeaFour.csv} \\
 Current default model & \texttt{embedding} \\
-Submission size target & Top 7,500 retrieved documents before category filtering \\
+Submission size target & Top 7,500 first-stage candidates; rerank top 30 with cross-encoder \\
 Date & \today \\
 \end{tabular}
 
@@ -104,7 +104,7 @@ Date & \today \\
 
 The logic is organized into several stages: strict data loading, shared text normalization, sequential model experimentation (TF-IDF to BM25+ to Embeddings), aggressive caching for performance, offline evaluation, and submission generation.
 
-The current system relies entirely on a highly optimized dense first-stage retriever paired with a dominant-category filter.
+The current system relies on a highly optimized dense first-stage retriever followed by a cross-encoder reranker, with category information injected as a soft bonus.
 
 \begin{figure}[H]
 \centering
@@ -118,7 +118,7 @@ The current system relies entirely on a highly optimized dense first-stage retri
 \node[box, fill=softgold]   (index)  at (5.0,3) {Cache artifacts\\TF-IDF / BM25+ / embeddings};
 \node[box, fill=softblue]   (retr)   at (10.0,2){Run retriever\\top-$k$ ranking};
 \node[box, fill=softgreen]  (eval)   at (15.0,1){Offline scoring\\+ category accuracy};
-\node[box, fill=softgold]   (sub)    at (20.0,0){Dominant-category\\filter + CSV};
+\node[box, fill=softgold]   (sub)    at (20.0,0){Cross-encoder\\rerank + CSV};
 
 \draw[->, thick] (data) -- (prep);
 \draw[->, thick] (prep) -- (index);
@@ -139,8 +139,9 @@ Component & Implemented & Active in saved run & Role in the pipeline \\
 TF-IDF retrieval & Yes & No & Sparse lexical baseline using cosine similarity. Fast, but struggled with semantic mismatch. \\
 BM25+ retrieval & Yes & No & Stronger lexical baseline with token-level scoring and document-length normalization. \\
 Embedding retrieval & Yes & Yes & Dense semantic first-stage retrieval with Sentence-Transformers. Yielded the best metrics. \\
-Category classifier & Yes & Yes & Predicts one category per query for evaluation and final CSV output. \\
-Dominant-category filter & Yes & Yes & Keeps only documents belonging to the dominant category among the top 20 retrieved items. \\
+Cross-encoder reranker & Yes & Yes & Re-ranks the first-stage candidates (top-\(m\)) using joint query-document scoring. \\
+Category classifier & Yes & Yes & Predicts one category per query and provides a soft category bonus during reranking. \\
+Dominant-category strict filter & Yes & No & Kept as an implemented option, but disabled in the active saved run. \\
 \bottomrule
 \end{tabularx}
 \caption{What the notebook supports versus what the saved execution actually uses.}
@@ -180,9 +181,9 @@ Text normalization is shared across all components: separators \texttt{-}, \text
 Our methodology evolved through a structured series of experiments, beginning with simple baselines and moving toward a complex, optimized semantic architecture.
 
 \subsection{Phase 1 \& 2: Lexical Baselines (TF-IDF and BM25+)}
-We initially implemented a \textbf{TF-IDF} retriever (using unigrams/bigrams with \texttt{min\_df=2}). This served as a fast, lightweight baseline to validate our data loading and evaluation pipeline. While transparent, TF-IDF struggled significantly with semantic mismatch—when queries paraphrased document concepts without sharing exact vocabulary, recall dropped.
+We initially implemented a \textbf{TF-IDF} retriever (using unigrams/bigrams with \texttt{min\_df=2}). This served as a fast, lightweight baseline to validate our data loading and evaluation pipeline. While transparent, TF-IDF struggled significantly with semantic mismatch -- when queries paraphrased document concepts without sharing exact vocabulary, recall dropped.
 
-To improve this, we upgraded to \textbf{BM25+}. By tokenizing the text and applying \texttt{k1=1.5} and \texttt{b=0.75}, BM25+ provided much stronger lexical ranking, correcting for the high variance in document lengths. However, BM25+ still fundamentally relied on exact token overlap, meaning synonymous phrasing remained a weakness.
+To improve this, we upgraded to \textbf{BM25+}. By tokenizing the text and applying \texttt{k1=1.5} and \texttt{b=0.75}, BM25+ provided much stronger lexical ranking, correcting for the high variance in document lengths. In the current notebook configuration, lexical components also use English stopword filtering. However, BM25+ still fundamentally relied on exact token overlap, meaning synonymous phrasing remained a weakness.
 
 \subsection{Phase 3: The Semantic Shift (Dense Embeddings)}
 To overcome the vocabulary mismatch problem, we transitioned to dense semantic retrieval using the Sentence-Transformer model \texttt{all-MiniLM-L6-v2}. Documents and queries were encoded into 384-dimensional L2-normalized vectors, allowing us to retrieve documents based on contextual meaning rather than exact keywords. This dramatically improved recall.
@@ -197,14 +198,14 @@ To solve this, we implemented aggressive caching and chunking mechanisms:
     \item \textbf{Partial Sorting:} We replaced full array sorts with \texttt{np.argpartition} to extract only the top-$K$ candidates efficiently.
 \end{itemize}
 
-\subsection{Phase 5: Hyperparameter Tuning and Category Filtering}
+\subsection{Phase 5: Hyperparameter Tuning and Two-Stage Reranking}
 With the pipeline running smoothly, we began tuning our parameters. We experimented heavily with \texttt{top\_k} retrieval depths. Because our dataset features a high semantic mismatch, we found that selecting a very large initial candidate pool (\texttt{top\_k = 7,500}) safely maximized recall. 
 
-To refine this massive list, we trained a TF-IDF + LinearSVC Category Classifier. By looking at the top 20 retrieved documents, we identify a "dominant category" and filter out any subsequent documents that do not belong to that category. This successfully cleans the noise out of the long tail of the 7,500 candidates.
+To refine this massive list, we trained a TF-IDF + LinearSVC category classifier and added a cross-encoder reranker. The reranker now rescores the top-\(m\) candidates (\texttt{top\_m=30}), while the predicted category is used as a soft bonus rather than a strict hard filter. This keeps recall robust while improving top-rank ordering.
 
 \section{Evaluation Protocol and Results}
 
-The notebook evaluates the optimized embedding run against the 327 training queries. Because the dominant-category filter may return fewer than $K$ documents, precision is calculated based on the number of predicted documents actually present after filtering. The combined score is calculated as:
+The notebook evaluates the optimized embedding run against the 327 training queries after optional second-stage reranking and category-aware score boosting. The combined score is calculated as:
 \[
 \text{Score} = \frac{1}{4}\left(\text{Recall} + \text{Precision} + \text{MRR} + \text{Accuracy}\right)
 \]
@@ -216,16 +217,16 @@ The notebook evaluates the optimized embedding run against the 327 training quer
 \toprule
 Model & TopK & Recall & Precision & MRR & Accuracy & Score \\
 \midrule
-Embedding & 7,500 & 0.91572 & 0.00178 & 0.46989 & 0.92661 & 0.59957 \\
+Embedding & 7,500 & 0.94762 & 0.00110 & 0.63738 & 0.92661 & 0.62818 \\
 \bottomrule
 \end{tabular}
-\caption{Offline metrics reported by the saved notebook execution.}
+\caption{Offline metrics reported by the saved notebook execution snapshot.}
 \end{table}
 
-The recall (0.9157) remains highly robust even after the category filter is applied. The filter effectively trims the fat—retained documents per query drop to a mean of roughly 4,841, without leaving any query empty. The MRR (0.46989) confirms that despite the long list, the first relevant document surfaces quite early in the ranking.
+These results show strong recall and a substantial MRR gain after introducing second-stage reranking. Since the notebook configuration was later synchronized to use \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 30} consistently for both evaluation and submission, rerunning the notebook can produce slightly different final numbers.
 
 \section{Conclusion}
 
-Our system evolved from basic lexical matching to a highly optimized semantic retrieval pipeline. By implementing dense embeddings, we solved the semantic mismatch problem; by engineering a robust caching and chunking system, we solved the 1.5-hour computational bottleneck; and by applying a dominant-category post-filter, we successfully cleaned the noise from deep \texttt{top\_k} retrievals. This architecture represents the final, submitted SeaFour pipeline.
+Our system evolved from basic lexical matching to a highly optimized two-stage semantic retrieval pipeline. By implementing dense embeddings, we solved the semantic mismatch problem; by engineering a robust caching and chunking system, we solved the 1.5-hour computational bottleneck; and by adding cross-encoder reranking with category-aware soft priors, we improved ranking quality at the top of the list. This architecture represents the current SeaFour submission pipeline.
 
 \end{document}

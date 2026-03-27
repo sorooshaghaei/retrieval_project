@@ -2,57 +2,96 @@
 
 ## Inputs
 
-The pipeline expects these files in `data/`:
+The notebook expects these files in `data/`:
 
 | File | Description |
 |------|-------------|
-| `docs.json` | 216,041 documents (id, text, title, tags, category) |
+| `docs.json` | 216,041 documents (`id`, `title`, `text`, `tags`, `category`) |
 | `queries_train.json` | 327 training queries |
 | `queries_test.json` | 141 test queries |
-| `qgts_train.json` | Training ground-truth relevance judgements |
+| `qgts_train.json` | Training relevance judgments |
 | `submission.csv` | Sample submission template |
+
+## Runtime Path Resolution
+
+The notebook auto-detects runtime and resolves paths as follows:
+- `kaggle`: `/kaggle/input/competitions/retrieval-engine-competition`
+- `colab`: mounted Google Drive project folder
+- `local`: nearest `data/` folder from current working directory
+
+Output defaults to `solutions_SeaFour.csv` at the project root.
 
 ## Shared Preprocessing
 
-Every model receives one normalised text field (`content`):
-- **Documents:** `title + text + tags` (tags are space-joined)
-- **Queries:** `title + text`
+All retrievers use normalized `content` text:
+- Documents: `title + text + tags`
+- Retrieval queries: `title + text`
+- Classifier queries: `title + text + tags`
 
-All text is lowercased. Missing values, lists, and mixed types are handled by `value_to_text()`.
+Normalization includes:
+- lowercasing
+- separator replacement for `-_/`
+- whitespace collapsing
+- trimming
 
-## Retrieval Methods
+Tokenization uses `TOKEN_PATTERN = [a-z0-9]+`.
 
-| Method | Type | Description |
-|--------|------|-------------|
-| TF-IDF | Sparse lexical | Unigram+bigram TfidfVectorizer, cosine similarity |
-| BM25+ | Sparse lexical | Tokenised corpus with `rank-bm25`, length normalisation |
-| Embedding | Dense semantic | Sentence-Transformer (`all-MiniLM-L6-v2`), dot product |
-| Hybrid | Sparse + Dense | BM25+ retrieves top-500 candidates → embedding re-ranking with score fusion |
+For lexical components (TF-IDF, classifier TF-IDF, BM25 tokenization), English stopword filtering is enabled by default:
+- `STOPWORD_FILTER_ENABLED = True`
+- `STOPWORD_LANGUAGE = "english"`
+- optional `CUSTOM_STOPWORDS`
 
-## Execution Flow
+## Retrieval Components
 
-1. **Environment setup** — auto-detect Kaggle or local `data/` directory.
-2. **Preprocessing** — build shared `content` column for docs and queries.
-3. **Retrieval** — run the selected model (`bm25`, `tfidf`, or `embedding_hybrid`) on test queries.
-4. **CSV writing** — serialise results in Kaggle format.
-5. **Preview** — display the first rows of the output CSV.
+| Component | Status | Role |
+|-----------|--------|------|
+| TF-IDF retriever | Implemented | Lexical baseline (`TfidfVectorizer`, cosine similarity) |
+| BM25+ retriever | Implemented | Lexical baseline (`rank-bm25`) |
+| Embedding retriever | Active | First-stage dense retrieval (`all-MiniLM-L6-v2`) |
+| Query category classifier | Active | TF-IDF + LinearSVC category prediction |
+| Cross-encoder reranker | Active | Second-stage reranking (`cross-encoder/ms-marco-MiniLM-L6-v2`) |
+| Strict dominant-category filter | Implemented, not active | Kept as optional utility |
 
-## How to Run
+## Active Execution Flow
 
-Open `kaggle/kaggle_submission.ipynb` and run all cells.
+1. Load data and validate schemas/ids.
+2. Build normalized `content` fields.
+3. Build/load cached artifacts:
+- TF-IDF and BM25 indexes
+- document/query embeddings
+- category classifier
+- cross-encoder model
+4. Run first-stage retrieval (`embedding`) with `top_k=7500`.
+5. Rerank top candidates with cross-encoder:
+- `CROSS_ENCODER_RERANK_TOP_M = 30`
+- soft category bonus applied when enabled
+6. Evaluate on train queries with:
+- Recall@K
+- Precision@K
+- MRR@K
+- category accuracy
+- combined score = average of the four metrics
+7. Run on test queries and write Kaggle-format CSV.
 
-## Configuration
+## Key Configuration (Current Defaults)
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `MODEL_NAME` | `bm25` | `bm25`, `tfidf`, or `embedding_hybrid` |
-| `TOP_K` | `100` | Documents per query |
-| `HYBRID_CANDIDATE_K` | `200` | Candidates before embedding rerank |
-| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformer model |
-| `EMBEDDING_BATCH_SIZE` | `128` | Encoding batch size |
-| `OUTPUT_PATH` | `kaggle/solutions_SeaFour.csv` | Output CSV path |
+| Parameter | Default |
+|-----------|---------|
+| `FINAL_MODEL` | `embedding` |
+| `EVALUATION_MODELS` | `("embedding",)` |
+| `EVALUATION_TOP_KS` | `[7500]` |
+| `SUBMIT_TOP_K` | `7500` |
+| `ENABLE_CROSS_ENCODER_RERANK` | `True` |
+| `CROSS_ENCODER_RERANK_TOP_M` | `30` |
+| `ENABLE_CATEGORY_FILTER` | `True` (used as soft bonus in reranking) |
+| `DOMINANT_CATEGORY_TOP_N` | `20` (for category stats / optional strict filter logic) |
 
-## Output
+## How To Run
 
-- **Submission CSV:** `kaggle/solutions_SeaFour.csv`
-- **Report:** `reports/retrieval_project_report.pdf`
+Open `kaggle/kaggle-submission.ipynb` and run all cells.
+
+## Outputs
+
+- Submission CSV: `solutions_SeaFour.csv`
+- Updated report source: `reports/retrieval_project_report_updated.tex`
+- Updated report PDF: `reports/retrieval_project_report_updated.pdf`
