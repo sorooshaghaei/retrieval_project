@@ -455,7 +455,7 @@ The lexical token pattern is
 That means tokens are sequences of lowercase letters and digits. So numbers are not automatically removed; they are kept whenever they match the pattern.
 
 \warningbox{
-This notebook does \textbf{not} implement classical stopword removal as a core preprocessing step. Therefore words such as \code{the} or \code{is} are not removed just because BM25+ is used. They may receive low discriminative weight, but they are still tokens unless you explicitly filter them.
+In the current notebook, stopword filtering is \textbf{enabled for lexical methods} (BM25+, TF-IDF, classifier TF-IDF) through the tokenizer and vectorizer settings. Words such as \code{the}, \code{is}, \code{are}, and \code{or} are removed from lexical features by default. You can disable this behavior via \code{STOPWORD_FILTER_ENABLED=False}.
 }
 
 \subsection{Why use shared preprocessing across all retrievers?}
@@ -656,7 +656,7 @@ The correct explanation is:
     \item BM25 is still a lexical matching model based on tokens.
     \item Common terms often receive lower \(\mathrm{idf}\), so they contribute less to ranking.
     \item Tokenization and stopword removal happen \emph{before} scoring if the pipeline designer chooses them.
-    \item In this notebook, the tokenizer keeps lowercase alphanumeric tokens, including numbers, and there is no dedicated stopword-removal stage in the shared preprocessing.
+    \item In this notebook, the tokenizer keeps lowercase alphanumeric tokens, including numbers, and applies configurable stopword filtering for lexical retrieval.
 \end{itemize}
 
 \subsection{Why BM25+ can beat TF-IDF lexically}
@@ -994,7 +994,7 @@ Only partly. It weights within-document frequency by inverse document frequency 
 
 \begin{termcard*}{Misunderstanding 2}
 \textbf{``BM25 removes stopwords.''}\\
-Not inherently. BM25 is a ranking formula. Stopword removal is a preprocessing design choice. In this notebook, there is no dedicated stopword-removal step in the shared normalization pipeline.
+Not inherently. BM25 is a ranking formula. Stopword removal is a preprocessing design choice. In this notebook, stopword filtering is enabled by configuration for lexical features; it is not an intrinsic property of BM25 itself.
 \end{termcard*}
 
 \begin{termcard*}{Misunderstanding 3}
