@@ -80,7 +80,7 @@
 
 \newtcblisting{asciibox}[1][]{
   colback=codebg,colframe=codeframe,fonttitle=\bfseries,
-  listing only,breakable,#1,
+  listing only,#1,
   coltitle=DeepPlum,
   listing options={basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true}
 }
@@ -176,14 +176,14 @@ path picture={
 \vspace*{1.3cm}
 {\Huge\bfseries Retrieval Engine Guide\\[0.35em]from Zero to 100\par}
 \vspace{0.45cm}
-{\large A readable study guide for the competition notebook and report\par}
+{\large A clearer, step-by-step study guide for the competition notebook and report\par}
 \vspace{0.6cm}
 
 \workedbox{Purpose}{
-This guide explains the retrieval project notebook from the ground up. It starts with the basic language of information retrieval, then moves to TF-IDF, BM25+, dense embeddings, category classification, dominant-category filtering, evaluation, and performance engineering. 
+This guide explains the retrieval project notebook from the ground up. It starts with the basic language of information retrieval, then moves to TF-IDF, BM25+, dense embeddings, category classification, dominant-category filtering, evaluation, and performance engineering. Compared with the earlier version, this edition also adds slower explanations, symbol-by-symbol formula reading, and small worked examples so the mathematical parts are easier to follow. 
 }
 
-\purplebox{Be carefull }{
+\purplebox{Be careful}{
 Two common misconceptions should be corrected from the start.
 \begin{itemize}
     \item \textbf{TF-IDF is not just repeated-word counting.} It weights within-document frequency by how rare the term is across the corpus.
@@ -238,7 +238,7 @@ Read Sections~\ref{sec:basics}, \ref{sec:pre}, \ref{sec:tfidf}, \ref{sec:bm25}, 
 \end{itemize}
 
 \notebox{
-This competition pipeline with TF-IDF and BM25+ baselines, a dense embedding retriever as the final active model, a TF-IDF + LinearSVC category classifier, and a dominant-category post-filter.
+This competition pipeline combines TF-IDF and BM25+ baselines, a dense embedding retriever as the final active model, a TF-IDF + LinearSVC category classifier, and a dominant-category post-filter.
 }
 
 \section{The retrieval problem }
@@ -276,6 +276,86 @@ The system sorts documents by descending score. Different retrieval methods defi
     \item BM25+ uses a token-level lexical relevance formula.
     \item Dense retrieval uses similarity between learned dense vectors.
 \end{itemize}
+
+\subsection{Precision, recall, and evaluation metrics (quick recap)}
+
+This is one of the places where students often get lost, so let us slow down and separate the notation from the idea.
+
+For one query \(q\):
+\begin{itemize}
+    \item \(R_q\) means ``the truly relevant documents for this query''.
+    \item \(S_q^K\) means ``the documents our system returned in the top \(K\) positions''.
+    \item \(|S_q^K \cap R_q|\) means ``how many of those top-\(K\) returned documents were actually relevant''.
+\end{itemize}
+
+So the quantity \(|S_q^K \cap R_q|\) is simply the \textbf{number of hits inside the top-\(K\)}. Once that is clear, the formulas become much less mysterious.
+
+\workedbox{Read the metrics in plain English}{
+For one query, start with this question: \emph{how many relevant documents did we successfully place in the top \(K\)?} Call that number the \textbf{hits}. Then:
+\begin{itemize}
+    \item \textbf{Precision@K} = hits divided by \(K\). It asks: among the \(K\) documents we returned, what fraction was correct?
+    \item \textbf{Recall@K} = hits divided by the total number of truly relevant documents. It asks: among everything relevant that existed, what fraction did we recover?
+    \item \textbf{F1@K} combines precision and recall into one number when you want a balance between both.
+\end{itemize}
+}
+
+Formally, with
+\[
+S_q^K = \{d_{i_1},\dots,d_{i_K}\},
+\]
+we have
+\[
+\mathrm{Precision@}K = \frac{|S_q^K \cap R_q|}{K}
+\qquad\text{and}\qquad
+\mathrm{Recall@}K = \frac{|S_q^K \cap R_q|}{|R_q|}.
+\]
+The F1 score at cutoff \(K\) is
+\[
+\mathrm{F1@}K = \frac{2\,\mathrm{Precision@}K\,\mathrm{Recall@}K}{\mathrm{Precision@}K + \mathrm{Recall@}K}.
+\]
+
+\purplebox{A concrete mini-example}{
+Suppose one query has exactly three relevant documents:
+\[
+R_q = \{d_3,d_8,d_{20}\}.
+\]
+Now suppose the system returns the following top-5 list:
+\[
+S_q^5 = \{d_8,d_2,d_3,d_{11},d_{40}\}.
+\]
+Then the relevant hits inside the top-5 are \(d_8\) and \(d_3\), so
+\[
+|S_q^5 \cap R_q| = 2.
+\]
+Therefore:
+\[
+\mathrm{Precision@5} = \frac{2}{5} = 0.40,
+\qquad
+\mathrm{Recall@5} = \frac{2}{3} \approx 0.67.
+\]
+Interpretation: the system found two relevant documents, which is good for recall, but three of the returned five were not relevant, which lowers precision.
+}
+
+Two key intuitions follow immediately:
+\begin{itemize}
+    \item Increasing \(K\) usually \textbf{raises recall}, because you keep more candidates and are less likely to miss relevant items.
+    \item Increasing \(K\) often \textbf{lowers precision}, because the denominator \(K\) grows and later ranks usually contain more noise.
+\end{itemize}
+
+Another common ranking metric is \textbf{MRR} (Mean Reciprocal Rank). MRR does \emph{not} ask how many relevant documents you found. It asks how early the \emph{first} relevant document appeared.
+
+For one query, if the first relevant document appears at rank \(r_q\), then the reciprocal rank is
+\[
+\mathrm{RR}(q) = \frac{1}{r_q}.
+\]
+Across all queries,
+\[
+\mathrm{MRR} = \frac{1}{|Q|}\sum_{q \in Q} \mathrm{RR}(q)
+= \frac{1}{|Q|}\sum_{q \in Q} \frac{1}{r_q}.
+\]
+If the first relevant result is at rank 1, the reciprocal rank is 1. If it is at rank 5, the reciprocal rank is \(1/5=0.2\). So high MRR means relevant documents show up early, not merely somewhere far down the ranking.
+
+All of these metrics are computed query by query and then averaged across queries.
 
 \subsection{What is top-k?}
 
@@ -397,6 +477,8 @@ Each document becomes a vector of size \(|V|\). Most entries are zero because ea
 
 For a term \(t\) and document \(d\), term frequency \(\mathrm{tf}(t,d)\) measures how often \(t\) appears in \(d\). A larger count usually suggests the term is more central to that document.
 
+Example: if the word \code{kernel} appears 6 times in document \(d_1\) but only once in document \(d_2\), then \(\mathrm{tf}(\texttt{kernel},d_1)\) is larger than \(\mathrm{tf}(\texttt{kernel},d_2)\). Inside \(d_1\), the term looks more important.
+
 But raw repetition alone is not enough. If a word occurs in almost every document, it is not very helpful for distinguishing relevant from irrelevant documents.
 
 \subsection{Inverse document frequency}
@@ -418,6 +500,21 @@ So TF-IDF is not merely counting repeated words. It answers a more refined quest
 Is this term frequent in this document \emph{and} relatively rare in the corpus?
 \end{quote}
 
+\workedbox{A tiny TF-IDF example}{
+Imagine a corpus with three documents:
+\begin{itemize}
+    \item \(d_1\): \code{kernel panic after update}
+    \item \(d_2\): \code{wifi driver update issue}
+    \item \(d_3\): \code{kernel module compilation}
+\end{itemize}
+Now compare the terms \code{kernel} and \code{panic}.
+\begin{itemize}
+    \item \code{kernel} appears in \(d_1\) and \(d_3\), so its document frequency is 2.
+    \item \code{panic} appears only in \(d_1\), so its document frequency is 1.
+\end{itemize}
+That means \code{panic} gets a larger IDF than \code{kernel}, because it is rarer. If the query is \code{kernel panic}, document \(d_1\) receives the strongest signal because it contains \emph{both} terms, including the rarer and more discriminative one.
+}
+
 \subsection{Query and document vectors}
 
 The query is also turned into a TF-IDF vector. Then the model computes similarity between the sparse query vector and each sparse document vector.
@@ -427,6 +524,10 @@ The most common similarity is cosine similarity:
 \cos(\theta) = \frac{\vect{q}\cdot\vect{d}}{\|\vect{q}\|\,\|\vect{d}\|}.
 \]
 This measures angle rather than raw length, which makes the comparison more stable when queries and documents have different sizes.
+
+\tipbox{
+A practical way to read cosine similarity is this: \textbf{the numerator} \(\vect{q}\cdot\vect{d}\) rewards shared weighted terms, while \textbf{the denominator} rescales by vector length so very long documents do not automatically dominate just because they contain more total words.
+}
 
 \begin{asciibox}[title={TF-IDF intuition}]
 rare term in query + rare term in document  --> strong signal
@@ -486,29 +587,52 @@ For each query term \(t\), BM25 computes a contribution to the score of document
 \mathrm{score}(q,d) = \sum_{t\in q} \mathrm{idf}(t)
 \left(
 \frac{f(t,d)(k_1+1)}{f(t,d)+k_1\left(1-b+b\frac{|d|}{\mathrm{avgdl}}\right)} + \delta
-\right),
+\right).
 \]
-where:
+
+Do not try to memorize that whole formula at once. Read it in layers:
+\begin{enumerate}
+    \item \textbf{Loop over the query terms.} The outer sum says: for every term in the query, add that term's contribution.
+    \item \textbf{Give rare terms more power.} The factor \(\mathrm{idf}(t)\) says rarer terms matter more.
+    \item \textbf{Reward term repetition, but not linearly forever.} The fraction involving \(f(t,d)\) increases when the term appears more often, but the gain gradually saturates.
+    \item \textbf{Correct for document length.} The \(|d|/\mathrm{avgdl}\) part prevents long documents from winning too easily just because they contain many words.
+    \item \textbf{Add a small positive offset.} The \(\delta\) term is the BM25+ refinement.
+\end{enumerate}
+
+The symbols mean:
 \begin{itemize}
-    \item \(f(t,d)\) is the frequency of term \(t\) in document \(d\),
-    \item \(|d|\) is document length,
-    \item \(\mathrm{avgdl}\) is average document length in the corpus,
-    \item \(k_1\) controls term-frequency saturation,
-    \item \(b\) controls document-length normalization,
-    \item \(\delta\) is the BM25+ offset.
+    \item \(f(t,d)\): how many times term \(t\) appears in document \(d\),
+    \item \(|d|\): document length,
+    \item \(\mathrm{avgdl}\): average document length in the corpus,
+    \item \(k_1\): how quickly the term-frequency reward saturates,
+    \item \(b\): how strongly length normalization is applied,
+    \item \(\delta\): the BM25+ offset.
 \end{itemize}
 
 \subsection{Term-frequency saturation}
 
 BM25 does not reward repeated terms linearly forever. The first few appearances matter more than the fiftieth. This is called \textbf{term-frequency saturation}. It reflects the intuition that after a point, additional repetitions add less new evidence.
 
+A simple intuition is this: seeing \code{kernel} once already tells you the document is about the kernel. Seeing it 40 times does strengthen that belief, but not by a factor of 40. BM25 models that diminishing return explicitly.
+
 \subsection{Length normalization}
 
 If two documents mention the same important term equally well, a much longer document should not automatically be preferred just because it contains more total words. The \(b\) parameter adjusts for this by comparing document length to average document length.
 
+For example, if document A has 120 words and document B has 2200 words, and both contain the same important query term a similar number of times, BM25 usually avoids over-rewarding the very long document. That is one reason BM25 often behaves more naturally than naive counting.
+
 \subsection{What BM25+ adds}
 
 BM25+ adds the \(\delta\) term so that long documents are not overly penalized when they do contain a query term. It is a refinement of BM25, especially helpful in some long-document settings.
+
+\workedbox{A two-document intuition check}{
+Suppose the query is \code{kernel panic}.
+\begin{itemize}
+    \item Document A is short, focused, and contains both terms clearly.
+    \item Document B is much longer, contains \code{kernel} many times, but mostly as background discussion.
+\end{itemize}
+TF-IDF may already prefer A, but BM25+ is often even better at this kind of situation because it explicitly controls both repetition and document length. In plain language, BM25+ says: \emph{repetition helps, but only up to a point, and long documents should be treated carefully.}
+}
 
 \subsection{How to interpret the notebook parameters}
 
@@ -565,6 +689,8 @@ An embedding is a dense vector representation:
 \]
 The important idea is not the exact dimension; it is that semantic information is distributed across the vector coordinates.
 
+In other words, the vector is not ``count word 1, count word 2, count word 3''. Instead, it is a learned numerical representation whose coordinates only make sense together. One coordinate by itself usually has no simple human interpretation; the meaning lives in the full pattern.
+
 \subsection{How dense retrieval works}
 
 The notebook encodes every document into a dense vector and stores the resulting matrix. Each query is also encoded into a dense vector. Then the retriever computes similarity between the query vector and all document vectors.
@@ -574,6 +700,10 @@ If vectors are L2-normalized, cosine similarity and dot product become equivalen
 \cos(\theta) = \vect{e}(q)^\top \vect{e}(d)
 \quad \text{when both vectors have unit norm.}
 \]
+
+\workedbox{A semantic example}{
+Suppose the query says \code{program hangs during launch} and a relevant document says \code{application freezes on startup}. A lexical retriever may struggle because \code{hangs} is not the same token as \code{freezes}, and \code{launch} is not the same token as \code{startup}. A dense embedding model can still place those two texts near each other because it learns semantic similarity rather than relying only on exact token overlap.
+}
 
 \subsection{Why dense retrieval helps here}
 
@@ -803,7 +933,8 @@ The saved notebook is organized in a clean progression:
 
 \subsection{What each code region is conceptually doing}
 
-\begin{longtable}{@{}p{0.18\textwidth}p{0.76\textwidth}@{}}
+\begin{center}
+\begin{tabular}{@{}p{0.18\textwidth}p{0.76\textwidth}@{}}
 \toprule
 \textbf{Notebook region} & \textbf{Conceptual role} \\
 \midrule
@@ -816,7 +947,8 @@ Evaluation logic & Computes Recall, Precision, MRR, Accuracy, and their average 
 Experiment loop & Runs the selected models, applies the dominant-category filter, and collects summary tables. \\
 Submission generation & Runs the final model on the test queries and writes the output CSV. \\
 \bottomrule
-\end{longtable}
+\end{tabular}
+\end{center}
 
 \subsection{What is ``active'' and what is ``implemented''}
 
@@ -904,6 +1036,10 @@ Not necessarily. With very large \(K\), precision can be numerically tiny while 
 
 \section{Formula sheet}
 
+\workedbox{How to use this appendix}{
+Do not read each formula as a block of symbols. First identify the \textbf{output} on the left-hand side, then identify the \textbf{main ingredients} on the right-hand side, and finally translate it into one plain-English sentence.
+}
+
 \subsection*{TF-IDF}
 \[
 \mathrm{tfidf}(t,d)=\mathrm{tf}(t,d)\cdot \mathrm{idf}(t)
@@ -911,11 +1047,22 @@ Not necessarily. With very large \(K\), precision can be numerically tiny while 
 \[
 \mathrm{idf}(t)=\log\left(\frac{N}{\mathrm{df}(t)}\right)
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} the weight of a term is larger when it appears often in this document and in relatively few documents overall.
+    \item \(\mathrm{tf}(t,d)\): frequency of term \(t\) inside document \(d\).
+    \item \(\mathrm{df}(t)\): number of documents that contain \(t\).
+    \item \(N\): total number of documents.
+\end{itemize}
 
 \subsection*{Cosine similarity}
 \[
 \cos(\theta)=\frac{\vect{q}\cdot\vect{d}}{\|\vect{q}\|\,\|\vect{d}\|}
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} compare the query vector and the document vector by alignment, not just by raw size.
+    \item The numerator rewards shared weighted directions.
+    \item The denominator rescales by vector length.
+\end{itemize}
 
 \subsection*{BM25+}
 \[
@@ -924,26 +1071,52 @@ Not necessarily. With very large \(K\), precision can be numerically tiny while 
 \frac{f(t,d)(k_1+1)}{f(t,d)+k_1\left(1-b+b\frac{|d|}{\mathrm{avgdl}}\right)} + \delta
 \right)
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} for each query term, reward rarity and in-document frequency, but with diminishing returns and length correction.
+    \item \(f(t,d)\): number of times \(t\) appears in \(d\).
+    \item \(|d|\): document length.
+    \item \(\mathrm{avgdl}\): average document length.
+    \item \(k_1\): saturation strength.
+    \item \(b\): length-normalization strength.
+    \item \(\delta\): BM25+ offset.
+\end{itemize}
 
 \subsection*{Recall@K}
 \[
 \mathrm{Recall@K}=\frac{|R_q\cap\hat{R}_{q,K}|}{|R_q|}
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} relevant documents found in the top-\(K\), divided by all relevant documents that existed.
+    \item Numerator: hits in the top-\(K\).
+    \item Denominator: total relevant items for this query.
+\end{itemize}
 
 \subsection*{Precision@K}
 \[
 \mathrm{Precision@K}=\frac{|R_q\cap\hat{R}_{q,K}|}{|\hat{R}_{q,K}|}
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} relevant documents found in the top-\(K\), divided by everything returned in the top-\(K\).
+    \item If you literally returned \(K\) items, then \(|\hat{R}_{q,K}| = K\).
+\end{itemize}
 
 \subsection*{MRR}
 \[
 \mathrm{MRR}=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{r_q}
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} average of the reciprocal of the first relevant rank.
+    \item \(r_q=1\) gives a contribution of 1.
+    \item \(r_q=5\) gives a contribution of 0.2.
+\end{itemize}
 
 \subsection*{Combined score}
 \[
 \mathrm{Score} = \frac{1}{4}(\mathrm{Recall}+\mathrm{Precision}+\mathrm{MRR}+\mathrm{Accuracy})
 \]
+\begin{itemize}
+    \item \textbf{Read it as:} the final evaluation gives equal weight to retrieval coverage, retrieval cleanliness, ranking quality, and category prediction quality.
+\end{itemize}
 
 \section{Ten oral-exam questions with model answers}
 
