@@ -43,6 +43,7 @@
 \renewcommand{\arraystretch}{1.18}
 \setlist[itemize]{leftmargin=1.4em, itemsep=2pt, topsep=3pt}
 \setlist[enumerate]{leftmargin=1.5em, itemsep=2pt, topsep=3pt}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 
 \titleformat{\section}{\large\bfseries\color{ink}}{\thesection}{0.6em}{}
@@ -63,6 +64,7 @@
 
 \begin{document}
 
+\hypersetup{pageanchor=false}
 \begin{titlepage}
 \centering
 \vspace*{1.0cm}
@@ -108,6 +110,8 @@ Date & \today \\
 
 \vfill
 \end{titlepage}
+\clearpage
+\hypersetup{pageanchor=true}
 
 \section{Introduction}
 
@@ -161,7 +165,7 @@ This report is meant to document not only the final score, but also the path tha
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{p{0.20\linewidth}p{0.30\linewidth}Y}
+\begin{tabularx}{\linewidth}{P{0.20\linewidth}P{0.30\linewidth}Y}
 \toprule
 Stage & Main question & Outcome \\
 \midrule
@@ -202,7 +206,7 @@ Attempt & BM25+ lexical upgrade & BM25+ improved over TF-IDF and handled length 
 Failure & Qrels parsing mismatch & The notebook read the wrong relevance field, which produced empty relevance sets and misleading zero Recall, Precision, and MRR values. & Parse \texttt{relevant\_doc\_ids} correctly and verify average relevant documents per query. \\
 Failure & Grouped sampling instability & A grouped pandas sampling pattern sometimes dropped the \texttt{category} column and caused notebook errors such as \texttt{KeyError: category}. & Switch to stable category-preserving downsampling for visualization and classifier preparation. \\
 Attempt & Query classifier with \texttt{text + tags} & The classifier became extremely accurate, but this setting uses metadata that we did not want to silently turn into the default Phase 2 pipeline. & Keep it as an explicit ablation and use text-only as the active setting. \\
-Decision & Validation depth versus submission depth & The best offline evaluation depth was \(K=1000\), but the final CSV benefits from exporting a deeper ranked list. & Separate validation selection from submission export and write 7,500 ids per query in the final file. \\
+Decision & Validation depth vs.\ submission depth & The best offline evaluation depth was \(K=1000\), but the final CSV benefits from exporting a deeper ranked list. & Separate validation selection from submission export and write 7,500 ids per query in the final file. \\
 \bottomrule
 \end{tabularx}
 \caption{Main previous tries, failures, and lessons learned during the project.}
@@ -387,7 +391,7 @@ The best validation result for each Phase 1 model is shown in Table~\ref{tab:pha
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{l c c c c c}
+\begin{tabular}{l c c c c c}
 \toprule
 Model & \(K\) & Recall@K & Precision@K & MRR@K & Latency/query \\
 \midrule
@@ -395,7 +399,7 @@ TF-IDF & 1000 & 0.54319 & 0.00418 & 0.23016 & 398.77 ms \\
 BM25+ & 1000 & 0.59151 & 0.00457 & 0.31228 & 394.77 ms \\
 Embeddings & 1000 & \textbf{0.86052} & \textbf{0.00720} & \textbf{0.49018} & \textbf{8.48 ms} \\
 \bottomrule
-\end{tabularx}
+\end{tabular}
 \caption{Best validation result per Phase 1 model.}
 \label{tab:phase1template}
 \end{table}
@@ -480,7 +484,7 @@ The final measured accuracies are shown in Table~\ref{tab:clfresults}.
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{l l c c}
+\begin{tabularx}{\linewidth}{l Y c c}
 \toprule
 Source & Variant & Split & Accuracy \\
 \midrule
@@ -519,7 +523,7 @@ Table~\ref{tab:phase2template} reports the best Phase 2 validation result for ea
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{l c c c c c c}
+\begin{tabularx}{\linewidth}{Y c c c c c c}
 \toprule
 Model & \(K\) & Recall@K & Precision@K & MRR@K & Accuracy & Combined \\
 \midrule
@@ -570,7 +574,7 @@ It is then evaluated once on the hold-out test split before being applied to the
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{l c c c c c}
+\begin{tabularx}{\linewidth}{Y c c c c c}
 \toprule
 Split / Score & Recall@K & Precision@K & MRR@K & Accuracy & Combined / Public Score \\
 \midrule
