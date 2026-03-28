@@ -83,7 +83,7 @@ Nguyen Ho Bao KHANH \\
 
 \begin{tikzpicture}[x=1cm,y=1cm,>=Latex]
   \node[draw=ink, rounded corners=5pt, fill=softblue, text width=13.7cm, minimum height=4.0cm, align=left, inner sep=10pt] (box) at (0,0) {
-  \textbf{Report objective.} This version updates the written report to match the current saved notebook exactly, including its present configuration choices and its current evaluation protocol. The active configuration uses embedding first-stage retrieval, a cross-encoder second-stage reranker, and a TF-IDF + LinearSVC category classifier whose prediction is converted into a soft category bonus during reranking.\\[0.25cm]
+  \textbf{Report objective.} This version updates the written report to match the current saved notebook exactly, including its present configuration choices and its current leakage-safe evaluation protocol. The active configuration uses embedding first-stage retrieval, a cross-encoder second-stage reranker, and a TF-IDF + LinearSVC category classifier fit only on the split-train queries, whose prediction is converted into a soft category bonus during reranking.\\[0.25cm]
   \textbf{Primary source files.} \texttt{kaggle-submissione.ipynb}, \texttt{solutions\_SeaFour.csv}, and this \LaTeX\ report.};
 \end{tikzpicture}
 
@@ -93,7 +93,7 @@ Nguyen Ho Bao KHANH \\
 Notebook file & \texttt{kaggle-submissione.ipynb} \\
 Submission file & \texttt{solutions\_SeaFour.csv} \\
 Current default model & \texttt{embedding} \\
-Submission size target & Top 7,500 first-stage candidates; offline rerank top 150; submission cell reranks top 20 \\
+Submission size target & Top 7,500 first-stage candidates; rerank top 150 with the same train-fitted artifacts for validation, hold-out test, and production \\
 Date & \today \\
 \end{tabular}
 
@@ -102,17 +102,18 @@ Date & \today \\
 
 \section{Notebook-Aligned System Overview}
 
-The logic is organized into several stages: strict data loading, shared text normalization, sequential model experimentation (TF-IDF to BM25+ to embeddings), aggressive caching for performance, category-classifier fitting, cross-encoder training, offline evaluation on the training queries, and final submission generation.
+The logic is organized into several stages: strict data loading, shared text normalization, a stratified \(60/30/10\) split over the labeled queries, sequential model experimentation (TF-IDF to BM25+ to embeddings), aggressive caching for performance, category-classifier fitting on the split-train queries, cross-encoder training on the split-train queries, validation-based model selection, one hold-out test evaluation, and final submission generation.
 
 The current system relies on a dense first-stage embedding retriever followed by a cross-encoder reranker, with category information injected as a soft bonus.
 
 The present notebook snapshot is configured as follows:
 \begin{itemize}
-    \item \texttt{EVALUATION\_TOP\_KS = [7500]}
+    \item \texttt{EVALUATION\_TOP\_KS = (7500,)}
+    \item \texttt{TRAIN\_FRACTION = 0.60}, \texttt{VALIDATION\_FRACTION = 0.30}, \texttt{TEST\_FRACTION = 0.10}
     \item \texttt{CROSS\_ENCODER\_TRAIN\_QUERY\_LIMIT = 327}
-    \item \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} for offline evaluation
-    \item category bonus \(= 2.0\) whenever \texttt{ENABLE\_CATEGORY\_FILTER = True}
-    \item the test-submission cell overrides the reranking depth to \texttt{top\_m = 20}
+    \item \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} for validation, hold-out test, and production reranking
+    \item category bonus \(= 2.0\) whenever \texttt{ENABLE\_CATEGORY\_BOOST = True}
+    \item the same train-fitted classifier vectorizer and cross-encoder are reused unchanged on validation, hold-out test, and production queries
 \end{itemize}
 
 \begin{figure}[H]
@@ -135,7 +136,7 @@ The present notebook snapshot is configured as follows:
 \draw[->, thick] (retr) -- (eval);
 \draw[->, thick] (eval) -- (sub);
 \end{tikzpicture}}
-\caption{Active end-to-end workflow in the saved notebook.}
+\caption{High-level end-to-end workflow in the saved notebook.}
 \end{figure}
 
 \begin{table}[H]
@@ -148,9 +149,8 @@ Component & Implemented & Active in saved run & Role in the pipeline \\
 TF-IDF retrieval & Yes & No & Sparse lexical baseline using cosine similarity. Fast, but struggled with semantic mismatch. \\
 BM25+ retrieval & Yes & No & Stronger lexical baseline with token-level scoring and document-length normalization. \\
 Embedding retrieval & Yes & Yes & Dense semantic first-stage retrieval with Sentence-Transformers. Yielded the best metrics. \\
-Cross-encoder reranker & Yes & Yes & Re-ranks the first-stage candidates using joint query-document scoring. The current notebook uses top-\(m=150\) during offline evaluation and top-\(m=20\) in the submission cell. \\
-Category classifier & Yes & Yes & Predicts one category per query, reports train-query accuracy, and provides a soft category bonus of \(2.0\) during reranking when enabled. \\
-Dominant-category strict filter & Yes & No & Kept as an implemented option, but disabled in the active saved run. \\
+Cross-encoder reranker & Yes & Yes & Re-ranks the first-stage candidates using joint query-document scoring. The current notebook uses top-\(m=150\) during validation, hold-out test, and production submission generation. \\
+Category classifier & Yes & Yes & Fits a TF-IDF + LinearSVC classifier on the split-train query set, reuses the same fitted transform on validation, hold-out test, and production queries, and provides a soft category bonus of \(2.0\) during reranking when enabled. \\
 \bottomrule
 \end{tabularx}
 \caption{What the notebook supports versus what the saved execution actually uses.}
@@ -183,7 +183,9 @@ The notebook loads 216,041 documents, 327 training queries, 141 test queries, an
 \caption{Document distribution by category.}
 \end{figure}
 
-Text normalization is shared across all components: separators \texttt{-}, \texttt{\_}, and \texttt{/} are replaced by spaces, whitespace is collapsed, and text is lowercased. Retrieval documents are built from \texttt{title + text + tags}, while retrieval queries use only \texttt{title + text}. The reason is that document-side tags are strong, reliable topical signals already attached to the corpus, so including them enriches the searchable document representation at almost no risk. Query-side retrieval, however, is kept closer to the natural user problem statement: title and body text carry the real retrieval intent, while query tags are handled separately in the classifier pipeline instead of being mixed directly into first-stage retrieval. This separation keeps the retrieval input closer to what the system will actually receive at test time while still allowing the classifier to exploit the extra categorical signal. The saved notebook prints average normalized lengths of 900.9 characters for documents, 48.4 for training queries, and 48.9 for test queries. This length disparity informed our ultimate shift away from purely lexical methods.
+The notebook now splits the 327 labeled queries into 196 split-train queries, 98 validation queries, and 33 hold-out test queries. Because 327 is not divisible exactly into \(60/30/10\), these are the closest integer counts, corresponding to \(59.94\%\), \(29.97\%\), and \(10.09\%\).
+
+Text normalization is shared across all components: separators \texttt{-}, \texttt{\_}, and \texttt{/} are replaced by spaces, whitespace is collapsed, and text is lowercased. Retrieval documents are built from \texttt{title + text + tags}, while retrieval queries use only \texttt{title + text}. The classifier uses \texttt{title + text + tags} on the query side, but its fitted TF-IDF transform is learned only on the split-train query set and then reused with \texttt{transform(...)} on validation, hold-out test, and production queries. This separation keeps the retrieval input closer to what the system will actually receive at test time while still allowing the classifier to exploit the extra categorical signal without leaking fitted preprocessing across splits. The saved notebook prints average normalized lengths of 900.9 characters for documents, 48.4 for training queries, and 48.9 for test queries. This length disparity informed our ultimate shift away from purely lexical methods.
 
 \section{Experimental Progression and Pipeline Optimization}
 
@@ -212,28 +214,29 @@ With the dense pipeline running smoothly, the notebook fixes the first-stage ret
 
 To refine the first-stage ranking, the notebook adds two auxiliary components:
 \begin{itemize}
-    \item a TF-IDF + LinearSVC category classifier trained on document-side category labels;
-    \item a cross-encoder reranker trained on all 327 training queries.
+    \item a TF-IDF + LinearSVC category classifier trained on the split-train query labels;
+    \item a cross-encoder reranker trained on the split-train queries only.
 \end{itemize}
 
 More specifically:
 \begin{itemize}
-    \item the classifier training frame is \texttt{docs\_classifier\_df};
+    \item the notebook builds a stratified split over labeled queries before any fitted query-side preprocessing is learned;
+    \item the classifier training frame is \texttt{split\_train\_queries\_classifier\_df};
     \item classifier content is built from \texttt{title + text + tags};
     \item query-side classifier frames also use \texttt{title + text + tags};
     \item the retriever itself continues to use only \texttt{title + text};
-    \item \texttt{CROSS\_ENCODER\_TRAIN\_QUERY\_LIMIT = 327};
+    \item \texttt{CROSS\_ENCODER\_TRAIN\_QUERY\_LIMIT = 327}, but the actual available split-train scope is 196 queries;
     \item \texttt{CROSS\_ENCODER\_HARD\_NEGATIVE\_TOP\_K = 200};
     \item up to four positives per query and four negatives per positive are used for cross-encoder training;
-    \item offline reranking uses \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150};
-    \item the submission cell overrides reranking depth and uses only the top 20 documents per query.
+    \item validation, hold-out test, and production reranking all use \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150};
+    \item the same fitted classifier vectorizer and trained cross-encoder are reused on production queries without refitting.
 \end{itemize}
 
 The category signal is no longer applied as a strict hard filter inside the active offline loop. Instead, the notebook computes
 \[
 \texttt{current\_bonus} =
 \begin{cases}
-2.0 & \text{if \texttt{ENABLE\_CATEGORY\_FILTER = True}}\\
+2.0 & \text{if \texttt{ENABLE\_CATEGORY\_BOOST = True}}\\
 0.0 & \text{otherwise}
 \end{cases}
 \]
@@ -241,17 +244,19 @@ and adds that scalar bonus to cross-encoder scores for documents whose category 
 
 \section{Evaluation Protocol and Results}
 
-The current saved notebook does \emph{not} build a held-out validation split. Instead, it performs the following exact sequence:
+The current saved notebook now follows a leakage-safe protocol built around a stratified \(60/30/10\) split over the 327 labeled queries. More precisely, it performs the following sequence:
 \begin{enumerate}
-    \item fit the TF-IDF + LinearSVC category classifier on \texttt{docs\_classifier\_df}, the document corpus with category labels,
-    \item compute category predictions for the training-query and test-query classifier frames, then report \texttt{classifier\_accuracy} on the training queries,
-    \item train or load the cross-encoder on \texttt{train\_queries\_df} with \texttt{CROSS\_ENCODER\_TRAIN\_QUERY\_LIMIT = 327},
-    \item run retrieval on \texttt{train\_queries\_df} at \texttt{top\_k = 7,500},
-    \item rerank the top 150 documents per query with the cross-encoder and the soft category bonus,
-    \item score the resulting ranking against \texttt{ground\_truth} for the same 327 training queries.
+    \item build a stratified split with 196 split-train queries, 98 validation queries, and 33 hold-out test queries,
+    \item fit the TF-IDF + LinearSVC category classifier only on \texttt{split\_train\_queries\_classifier\_df},
+    \item compute category predictions for validation, hold-out test, and production query frames with the same fitted transform,
+    \item train or load the cross-encoder on \texttt{split\_train\_queries\_df} and \texttt{train\_ground\_truth},
+    \item run retrieval on the validation queries at \texttt{top\_k = 7,500},
+    \item rerank the top 150 documents per validation query with the cross-encoder and the soft category bonus,
+    \item choose the best validation configuration, then run it once on the hold-out test split,
+    \item generate production predictions for the 141 Kaggle test queries using the same fitted classifier vectorizer and the same trained cross-encoder.
 \end{enumerate}
 
-So the present notebook's offline score is a \textbf{training-query score}. It is aligned with the saved notebook code, but it is not a held-out validation estimate. This distinction matters when interpreting the resulting numbers. One older markdown explanation inside the notebook still says the system writes the first-stage ranking directly; however, the active saved code and outputs clearly include cross-encoder reranking and the category bonus. This report follows the executed pipeline rather than that stale prose.
+So the present notebook's reported offline comparison is a \textbf{validation-first, hold-out-tested estimate} rather than the older training-query score used in previous versions. This distinction matters because the fitted query-side preprocessing and the cross-encoder no longer see the validation or hold-out test queries during fitting. The report now follows the cleaned notebook rather than the older notebook snapshot.
 
 The combined score is calculated as:
 \[
@@ -266,22 +271,24 @@ The combined score is calculated as:
 Setting & Current notebook value \\
 \midrule
 \texttt{EVALUATION\_MODELS} & \texttt{("embedding",)} \\
-\texttt{EVALUATION\_TOP\_KS} & \texttt{[7500]} \\
-Offline query set & \texttt{train\_queries\_df} (327 training queries) \\
-Cross-encoder train scope & all 327 training queries; \texttt{CROSS\_ENCODER\_TRAIN\_QUERY\_LIMIT = 327} \\
-Offline rerank depth & \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} \\
-Submission rerank depth & hard-coded \texttt{rerank\_top\_m = 20} in the submission cell \\
-Category bonus & \texttt{2.0} when \texttt{ENABLE\_CATEGORY\_FILTER = True} \\
-Reported classifier accuracy & computed on the training queries \\
+\texttt{EVALUATION\_TOP\_KS} & \texttt{(7500,)} \\
+Query split & 196 split-train / 98 validation / 33 hold-out test queries \\
+Category-classifier fit scope & \texttt{split\_train\_queries\_classifier\_df} only \\
+Cross-encoder train scope & \texttt{split\_train\_queries\_df} with \texttt{train\_ground\_truth} (196 queries) \\
+Validation rerank depth & \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} \\
+Hold-out test rerank depth & \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} \\
+Production rerank depth & \texttt{CROSS\_ENCODER\_RERANK\_TOP\_M = 150} \\
+Category bonus & \texttt{2.0} when \texttt{ENABLE\_CATEGORY\_BOOST = True} \\
+Reported classifier summary & train / validation / hold-out test accuracy table; production rows have no accuracy target \\
 \bottomrule
 \end{tabularx}
 \caption{Evaluation and reranking settings in the current saved notebook.}
 \end{table}
 
-The notebook prints metric values dynamically from \texttt{leaderboard\_score(...)} and stores the best row in \texttt{best\_experiment = eval\_summary\_df.iloc[0]}. Because those numbers are not hard-coded in the source file and because the current protocol evaluates on the training queries, this report documents the protocol and settings rather than claiming a fresh held-out score.
+The notebook prints a split summary table together with classifier, validation, and hold-out test summary tables at runtime. Because those values are computed dynamically rather than hard-coded in the source file, this report documents the protocol and settings rather than freezing one transient metric snapshot in the text.
 
 \section{Conclusion}
 
-Our system evolved from basic lexical matching to a two-stage semantic retrieval pipeline centered on dense embeddings, aggressive caching, and cross-encoder reranking. In the current saved notebook snapshot, the active configuration is very specific: embedding-only first-stage retrieval at \texttt{top\_k=7,500}, a cross-encoder trained on all 327 training queries, a soft category bonus of \(2.0\) when enabled, offline reranking of the top 150 candidates, and a submission-cell override that reranks only the top 20 test candidates. This report now matches that notebook behavior directly, including the important fact that the present offline score is computed on the training query set rather than on a separate validation split.
+Our system evolved from basic lexical matching to a two-stage semantic retrieval pipeline centered on dense embeddings, aggressive caching, and cross-encoder reranking. In the current saved notebook snapshot, the active configuration is more disciplined than before: embedding-only first-stage retrieval at \texttt{top\_k=7,500}, a stratified \(60/30/10\) query split, a category classifier fit only on the split-train queries, a cross-encoder trained only on the split-train queries, a soft category bonus of \(2.0\) when enabled, and consistent reranking at top 150 for validation, hold-out test, and production submission. This report now matches that notebook behavior directly, including the important fact that fitted query preprocessing is no longer learned on evaluation queries.
 
 \end{document}
