@@ -427,7 +427,15 @@ Embedding retrieval & \textbf{0.86052} & \textbf{0.00720} & \textbf{0.49018} & T
 
 \subsection{Classifier model}
 
-The final notebook uses a \textbf{TF-IDF + LinearSVC} classifier. This model is appropriate because it is effective on sparse text representations, scales well to large vocabularies, and provides a strong multiclass baseline.
+The final notebook uses a \textbf{TF-IDF + LinearSVC} classifier. This choice is motivated by the fact that Phase 2 is a \emph{classification} problem rather than a retrieval problem: given one text, the system must assign one category label.
+
+\textbf{TF-IDF} converts each text into a sparse weighted vocabulary vector. Terms that are frequent inside one text but not frequent across the whole corpus receive larger weights. This representation is a strong fit for category prediction in this dataset because categories are often signaled by distinctive technical vocabulary. In other words, exact words such as package names, tools, commands, platforms, or domain-specific expressions often carry strong evidence about the correct label.
+
+\textbf{LinearSVC} is a linear Support Vector Machine classifier. In practice, it learns a set of weights over the TF-IDF features and gives each class a score, then predicts the class with the highest score. Linear SVMs are a standard choice for text classification because they work very well with high-dimensional sparse vectors, train quickly, and provide a strong multiclass baseline that is easy to reproduce.
+
+It is also useful to explain why the other project models were not used as the primary classifier. \textbf{BM25+} is fundamentally a query-document matching function, not a supervised multiclass classifier. It is well suited for ranking documents against a query, but using it for category prediction would require a more indirect design such as matching a text against category prototypes. \textbf{Dense embeddings} are excellent for Phase 1 retrieval because they reduce vocabulary mismatch and capture semantic similarity, but an embedding-based classifier would add extra modeling complexity and tuning effort here.
+
+For this reason, the final design keeps the strongest semantic model where it matters most for retrieval, while using a lighter and more direct supervised model for category prediction. Since the classifier is used as a \emph{soft reranking signal} rather than as the main retrieval engine, \textbf{TF-IDF + LinearSVC} offers the clearest tradeoff between accuracy, speed, interpretability, and methodological simplicity.
 
 \subsection{Training data choice}
 
