@@ -8,7 +8,7 @@
 \usepackage{microtype}
 \usepackage{setspace}
 \usepackage{amsmath,amssymb}
-\usepackage{booktabs,longtable,tabularx,array,multirow}
+\usepackage{booktabs,longtable,tabularx,array}
 \usepackage{graphicx}
 \usepackage{enumitem}
 \usepackage{hyperref}
@@ -21,9 +21,9 @@
 \usepackage{xcolor}
 \usepackage{ragged2e}
 \usepackage{multicol}
-\usepackage{needspace}
 \usepackage{etoolbox}
 
+\raggedbottom
 \setstretch{1.12}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.55em}
@@ -47,13 +47,16 @@
 \definecolor{DeepPurple}{HTML}{5F3A9B}
 \definecolor{SoftGray}{HTML}{F8FAFC}
 
+\newcommand{\GuideTitle}{Retrieval from Zero}
+\newcommand{\GuideAuthor}{Soroosh Aghaei}
+
 \color{BodyGray}
 \hypersetup{
   colorlinks=true,
   linkcolor=TitleBlue,
   urlcolor=AccentTeal,
-  pdftitle={Retrieval from Zero: A Beginner-First Study Manual},
-  pdfauthor={OpenAI},
+  pdftitle={\GuideTitle},
+  pdfauthor={\GuideAuthor},
   pdfsubject={Information retrieval study guide from beginner foundations to full pipeline understanding}
 }
 
@@ -166,6 +169,22 @@
 Each chapter tries to follow the same learning rhythm: why the idea exists, what problem it solves, a toy example, a more technical explanation, a careful formal version, a warning about common confusion, and a few small questions so you can check whether the idea really made sense.
 \end{rememberbox}}
 
+\makeatletter
+\newcommand{\compacttableofcontents}{%
+  \chapter*{\contentsname}
+  \@mkboth{\MakeUppercase\contentsname}{\MakeUppercase\contentsname}%
+  \begingroup
+  \setlength{\parskip}{0pt}%
+  \setlength{\columnsep}{1em}%
+  \footnotesize
+  \setstretch{0.9}%
+  \begin{multicols}{2}
+  \@starttoc{toc}%
+  \end{multicols}
+  \endgroup
+}
+\makeatother
+
 \begin{document}
 
 \begin{titlepage}
@@ -174,16 +193,16 @@ Each chapter tries to follow the same learning rhythm: why the idea exists, what
 \fill[TitleBlue] (current page.north west) rectangle (current page.south east);
 \fill[white,opacity=0.08] ([xshift=-1cm,yshift=-2cm]current page.north east) circle (4cm);
 \fill[white,opacity=0.08] ([xshift=1cm,yshift=3cm]current page.south west) circle (5cm);
-\node[anchor=north west,text width=0.78\paperwidth,align=left] at ([xshift=1in,yshift=-1.25in]current page.north west) {\color{white}\bfseries\fontsize{28}{32}\selectfont Retrieval from Zero\\[0.4em]A beginner-first study manual for understanding retrieval models, reranking, classification support, evaluation, and the full notebook pipeline};
-\node[anchor=north west,text width=0.68\paperwidth,align=left] at ([xshift=1in,yshift=-4.45in]current page.north west) {\color{white}\Large This guide starts before information retrieval. It first teaches the minimum foundations in data science, text processing, vectors, and similarity so that later ideas such as TF--IDF, BM25, embeddings, bi-encoders, cross-encoders, category-aware reranking, validation, and leakage can be understood calmly rather than memorized mechanically.};
-\node[anchor=south west,text width=0.75\paperwidth,align=left] at ([xshift=1in,yshift=1.1in]current page.south west) {\color{white}\large Designed as a self-contained learning path with worked examples, comparison tables, self-checks, and short answers.};
+\node[anchor=north west,text width=0.78\paperwidth,align=left,text badly ragged] at ([xshift=1in,yshift=-1.25in]current page.north west) {\color{white}\bfseries\fontsize{28}{32}\selectfont \GuideTitle\\[0.4em]A beginner's guide to retrieval, reranking, evaluation,\\and end-to-end search pipelines};
+\node[anchor=north west,text width=0.68\paperwidth,align=left] at ([xshift=1in,yshift=-4.45in]current page.north west) {\color{white}\Large Start with the foundations of text, vectors, similarity, and ranking. Then build toward TF--IDF, BM25, embeddings, bi-encoders, cross-encoders, category-aware reranking, and reliable evaluation.};
+\node[anchor=south west,text width=0.75\paperwidth,align=left] at ([xshift=1in,yshift=1.1in]current page.south west) {\color{white}\large A self-contained study path with worked examples, diagrams, glossaries, and self-checks.\\[0.8em]\textbf{Author:} \GuideAuthor};
 \end{tikzpicture}
 \vfill
 \end{titlepage}
 
 \pagenumbering{roman}
-\chapter*{How to use this manual}
-\addcontentsline{toc}{chapter}{How to use this manual}
+\chapter*{How to Use This Guide}
+\addcontentsline{toc}{chapter}{How to Use This Guide}
 This document is designed for a student who has no stable base yet. It is not a compressed revision sheet. It is a teaching document. Read it in order on the first pass. On the second pass, pause often and solve the self-checks before reading the answers. On the third pass, connect the ideas to the actual notebook and its implementation choices.
 
 There are three important promises behind the structure.
@@ -195,54 +214,12 @@ There are three important promises behind the structure.
 
 \chapterpattern
 
-\chapter*{Contents}
-\begin{multicols}{2}
-\footnotesize
-\textbf{How to use this manual}\dotfill i\\[0.2em]
-\textbf{Part I. Before Retrieval: the beginner foundations}\dotfill 1\\
-\hspace*{1em}1. What data science is, in plain language\dotfill 2\\
-\hspace*{1em}2. Text as data\dotfill 5\\
-\hspace*{1em}3. Vectors, matrices, and similarity from zero\dotfill 8\\[0.2em]
-\textbf{Part II. Understanding the retrieval problem}\dotfill 11\\
-\hspace*{1em}4. What information retrieval is\dotfill 12\\
-\hspace*{1em}5. Lexical matching versus semantic matching\dotfill 15\\[0.2em]
-\textbf{Part III. Lexical retrieval models}\dotfill 18\\
-\hspace*{1em}6. Bag of words from zero\dotfill 19\\
-\hspace*{1em}7. TF, DF, and IDF slowly and properly\dotfill 21\\
-\hspace*{1em}8. TF--IDF for retrieval\dotfill 24\\
-\hspace*{1em}9. BM25\dotfill 27\\
-\hspace*{1em}10. BM25+\dotfill 30\\[0.2em]
-\textbf{Part IV. Semantic retrieval models}\dotfill 32\\
-\hspace*{1em}11. Embeddings from zero\dotfill 33\\
-\hspace*{1em}12. Bi-encoder retrieval\dotfill 35\\
-\hspace*{1em}13. Limits of embeddings\dotfill 37\\[0.2em]
-\columnbreak
-\textbf{Part V. Reranking and deeper relevance}\dotfill 39\\
-\hspace*{1em}14. What a reranker is\dotfill 40\\
-\hspace*{1em}15. Cross-encoder from zero\dotfill 42\\
-\hspace*{1em}16. Hard negatives and training intuition\dotfill 44\\[0.2em]
-\textbf{Part VI. Classification inside a retrieval pipeline}\dotfill 46\\
-\hspace*{1em}17. What classification is\dotfill 47\\
-\hspace*{1em}18. Why classification can help retrieval\dotfill 49\\
-\hspace*{1em}19. TF--IDF + LinearSVC from zero\dotfill 51\\[0.2em]
-\textbf{Part VII. Evaluation and experimental honesty}\dotfill 53\\
-\hspace*{1em}20. Evaluation metrics from zero\dotfill 54\\
-\hspace*{1em}21. Validation, holdout, and test\dotfill 57\\
-\hspace*{1em}22. Hyperparameters and tuning\dotfill 60\\[0.2em]
-\textbf{Part VIII. Engineering and notebook understanding}\dotfill 62\\
-\hspace*{1em}23. Why engineering matters\dotfill 63\\
-\hspace*{1em}24. Reading the notebook as a system\dotfill 65\\
-\hspace*{1em}25. One-query journey through the whole pipeline\dotfill 68\\
-\hspace*{1em}26. Full pipeline mental model\dotfill 71\\[0.2em]
-\textbf{Progressive glossaries}\dotfill 74--81\\
-\textbf{Appendix A. Final cheat sheet}\dotfill 82\\
-\textbf{Master glossary}\dotfill 84\\
-\end{multicols}
+\compacttableofcontents
 
 \clearpage
 \pagenumbering{arabic}
-\part{Before Retrieval: the beginner foundations}
-\chapter{What data science is, in plain language}
+\part[Foundations]{Before Retrieval: the beginner foundations}
+\chapter[Data Science in Plain Language]{What data science is, in plain language}
 
 \begin{purposebox}
 Before learning retrieval, you need a small mental toolkit for thinking about data-driven systems. Without that toolkit, later words such as feature, label, model, training, and evaluation feel abstract and disconnected.
@@ -318,7 +295,7 @@ Data science is the disciplined use of examples to build, compare, and evaluate 
 \end{rememberbox}
 
 
-\chapter{Text as data}
+\chapter[Text as Data]{Text as data}
 
 \begin{purposebox}
 Retrieval works on text. But computers do not directly manipulate meaning in the way humans do. They manipulate symbols, indices, and numbers. This chapter explains how raw text becomes something a machine can compute with.
@@ -392,7 +369,7 @@ Text retrieval starts with representation. The system cannot search meaning dire
 \end{rememberbox}
 
 
-\chapter{Vectors, matrices, and similarity from zero}
+\chapter[Vectors, Matrices, and Similarity]{Vectors, matrices, and similarity from zero}
 
 \begin{purposebox}
 Retrieval models compare texts. To compare them mathematically, they are often converted into vectors. This chapter gives the minimum linear-algebra intuition needed for the rest of the guide.
@@ -475,8 +452,8 @@ Similarity is central because retrieval is not just ``does this document contain
 \end{rememberbox}
 
 
-\part{Understanding the retrieval problem}
-\chapter{What information retrieval is}
+\part[The Retrieval Problem]{Understanding the retrieval problem}
+\chapter[What Retrieval Is]{What information retrieval is}
 
 \begin{purposebox}
 Now that you know how data and text can be represented, you are ready to understand the retrieval problem itself: given a query, how do we search a large corpus and order the documents so the most helpful ones appear first?
@@ -553,7 +530,7 @@ Retrieval is the task of ranking a corpus against a query. The central problem i
 \end{rememberbox}
 
 
-\chapter{Lexical matching versus semantic matching}
+\chapter[Lexical vs. Semantic Matching]{Lexical matching versus semantic matching}
 
 \begin{purposebox}
 The biggest conceptual divide in modern retrieval is the divide between \emph{lexical} matching and \emph{semantic} matching. Understanding that divide will make the later chapters on TF--IDF, BM25, embeddings, and rerankers much easier.
@@ -630,8 +607,8 @@ Lexical methods ask ``which words overlap?'' Semantic methods ask ``which meanin
 \end{rememberbox}
 
 
-\part{Lexical retrieval models}
-\chapter{Bag of words from zero}
+\part[Lexical Models]{Lexical retrieval models}
+\chapter[Bag of Words]{Bag of words from zero}
 
 \begin{purposebox}
 Most classical lexical retrieval methods begin with the bag-of-words view of text. It is simple, imperfect, and foundational.
@@ -684,7 +661,7 @@ Bag of words is the simplest way to turn text into count-based vectors. Later me
 \end{rememberbox}
 
 
-\chapter{TF, DF, and IDF slowly and properly}
+\chapter[TF, DF, and IDF]{TF, DF, and IDF slowly and properly}
 
 \begin{purposebox}
 Raw counts are a start, but they are not enough. This chapter explains the three pieces that lead into TF--IDF: term frequency, document frequency, and inverse document frequency.
@@ -751,7 +728,7 @@ TF tells you how prominent a term is inside one document. IDF tells you how info
 \end{rememberbox}
 
 
-\chapter{TF--IDF for retrieval}
+\chapter[TF--IDF Retrieval]{TF--IDF for retrieval}
 
 \begin{purposebox}
 This chapter brings the previous pieces together. TF--IDF is the classical sparse lexical weighting scheme that many students meet first in information retrieval and text mining.
@@ -944,8 +921,8 @@ BM25+ is best understood as a careful refinement of BM25, not as a completely di
 \end{rememberbox}
 
 
-\part{Semantic retrieval models}
-\chapter{Embeddings from zero}
+\part[Semantic Models]{Semantic retrieval models}
+\chapter[Embeddings]{Embeddings from zero}
 
 \begin{purposebox}
 Sparse lexical methods are powerful, but they struggle when relevant documents use different wording. Embeddings were developed to represent text in a dense meaning-oriented space where similar texts can land near one another even without strong token overlap.
@@ -993,7 +970,7 @@ An embedding is a dense learned vector whose main job is to place semantically r
 \end{rememberbox}
 
 
-\chapter{Bi-encoder retrieval}
+\chapter[Bi-Encoder Retrieval]{Bi-encoder retrieval}
 
 \begin{purposebox}
 Bi-encoder retrieval is the main large-scale semantic retrieval pattern. It explains why dense retrieval can be used over a big corpus without rereading every query-document pair jointly.
@@ -1049,7 +1026,7 @@ Bi-encoders make semantic retrieval practical at scale by separating query encod
 \end{rememberbox}
 
 
-\chapter{Limits of embeddings}
+\chapter[Limits of Embeddings]{Limits of embeddings}
 
 \begin{purposebox}
 Dense retrieval is powerful, but it is not free and it is not perfect. Understanding its limitations prevents unrealistic expectations and explains why later reranking or category-aware adjustment may help.
@@ -1095,8 +1072,8 @@ Dense retrieval is often an excellent candidate generator, but it is not usually
 \end{rememberbox}
 
 
-\part{Reranking and deeper relevance}
-\chapter{What a reranker is}
+\part[Reranking]{Reranking and deeper relevance}
+\chapter[What a Reranker Is]{What a reranker is}
 
 \begin{purposebox}
 First-stage retrieval must be fast. Because of that speed requirement, it usually makes some mistakes near the top of the ranking. A reranker exists to make better local decisions on a smaller candidate set.
@@ -1144,7 +1121,7 @@ The first stage finds plausible candidates; the reranker tries to decide which o
 \end{rememberbox}
 
 
-\chapter{Cross-encoder from zero}
+\chapter[Cross-Encoder]{Cross-encoder from zero}
 
 \begin{purposebox}
 The cross-encoder is the most important reranking concept in modern retrieval pipelines. It explains how a model can read a query and a document together and make a more precise pairwise relevance judgment than a bi-encoder usually can.
@@ -1210,7 +1187,7 @@ Bi-encoders are efficient candidate generators. Cross-encoders are slower but of
 \end{rememberbox}
 
 
-\chapter{Hard negatives and training intuition}
+\chapter[Hard Negatives and Training]{Hard negatives and training intuition}
 
 \begin{purposebox}
 To train a reranker well, it is not enough to show it only obviously wrong examples. It must also learn from difficult mistakes. That is where hard negatives come in.
@@ -1264,8 +1241,8 @@ A reranker becomes useful not merely by learning what is wrong in general, but b
 \end{rememberbox}
 
 
-\part{Classification inside a retrieval pipeline}
-\chapter{What classification is}
+\part[Classification Support]{Classification inside a retrieval pipeline}
+\chapter[What Classification Is]{What classification is}
 
 \begin{purposebox}
 Classification appears inside the retrieval pipeline later as a helper. Before using it that way, it must be understood on its own terms.
@@ -1313,7 +1290,7 @@ Classification and retrieval are different tasks. In this guide, classification 
 \end{rememberbox}
 
 
-\chapter{Why classification can help retrieval}
+\chapter[Why Classification Helps Retrieval]{Why classification can help retrieval}
 
 \begin{purposebox}
 This chapter explains the exact role of classification inside a retrieval pipeline: not replacing retrieval, but gently guiding it.
@@ -1372,7 +1349,7 @@ Category is a weak prior, not the definition of relevance. That is why a soft bo
 \end{rememberbox}
 
 
-\chapter{TF--IDF + LinearSVC from zero}
+\chapter[TF--IDF + LinearSVC]{TF--IDF + LinearSVC from zero}
 
 \begin{purposebox}
 A very common classical text-classification pipeline uses TF--IDF features with a linear classifier such as LinearSVC. This chapter explains what that means in beginner language.
@@ -1423,8 +1400,8 @@ TF--IDF + LinearSVC is a reliable, efficient way to predict text categories. In 
 \end{rememberbox}
 
 
-\part{Evaluation and experimental honesty}
-\chapter{Evaluation metrics from zero}
+\part[Evaluation]{Evaluation and experimental honesty}
+\chapter[Evaluation Metrics]{Evaluation metrics from zero}
 
 \begin{purposebox}
 A retrieval system cannot be improved honestly without good evaluation. This chapter explains the core metrics slowly, first in plain language and then with formulas.
@@ -1518,7 +1495,7 @@ Precision measures cleanliness, recall measures coverage, and MRR measures how e
 \end{rememberbox}
 
 
-\chapter{Validation, holdout, and test}
+\chapter[Validation, Holdout, and Test]{Validation, holdout, and test}
 
 \begin{purposebox}
 You cannot trust an evaluation protocol unless you understand where each decision was made. This chapter explains why training, validation, holdout, and final unlabeled test must be kept conceptually separate.
@@ -1583,7 +1560,7 @@ A credible retrieval system is not only a good model. It is also a clean experim
 \end{rememberbox}
 
 
-\chapter{Hyperparameters and tuning}
+\chapter[Hyperparameters and Tuning]{Hyperparameters and tuning}
 
 \begin{purposebox}
 Once the basic protocol is clear, the next question is: which settings should be chosen, and how should they be tuned without breaking the protocol?
@@ -1641,8 +1618,8 @@ Training learns parameters. Tuning chooses the outer settings of the system. Hon
 \end{rememberbox}
 
 
-\part{Engineering and notebook understanding}
-\chapter{Why engineering matters}
+\part[Pipeline Engineering]{Engineering and notebook understanding}
+\chapter[Why Engineering Matters]{Why engineering matters}
 
 \begin{purposebox}
 A theoretically good retrieval pipeline can still be unusable if it is too slow or too memory-hungry. Engineering is not decoration around the model; it is part of making the system practical.
@@ -1688,7 +1665,7 @@ A retrieval notebook becomes a retrieval system only when its ideas are paired w
 \end{rememberbox}
 
 
-\chapter{Reading the notebook as a system}
+\chapter[Reading the Notebook as a System]{Reading the notebook as a system}
 
 \begin{purposebox}
 Once the concepts are clear, the notebook stops looking like random Python. It becomes a system with distinct blocks, each block solving a specific problem.
@@ -1770,7 +1747,7 @@ A notebook becomes readable when each cell is translated into a pipeline respons
 \end{rememberbox}
 
 
-\chapter{One-query journey through the whole pipeline}
+\chapter[One Query Through the Pipeline]{One-query journey through the whole pipeline}
 
 \begin{purposebox}
 Many students understand the pieces separately but still do not ``see the movie.'' This chapter follows one query through the entire pipeline from raw text to evaluation.
@@ -1849,7 +1826,7 @@ A useful mental image is: preprocess for consistency, retrieve for coverage, rer
 \end{rememberbox}
 
 
-\chapter{Full pipeline mental model}
+\chapter[Full Pipeline Mental Model]{Full pipeline mental model}
 
 \begin{purposebox}
 This final chapter integrates the full learning path. Its goal is not to introduce new terminology, but to connect every major component into one coherent system-level understanding.
@@ -1881,7 +1858,7 @@ Use lexical methods when exact terms, codes, flags, and commands matter. Use den
 
 \section*{Final integrated diagram}
 \begin{center}
-\begin{tikzpicture}[scale=0.85,transform shape,node distance=0.6cm and 0.55cm, every node/.style={font=\small}]
+\begin{tikzpicture}[scale=0.76,transform shape,node distance=0.6cm and 0.55cm, every node/.style={font=\small}]
 \node[draw,rounded corners,fill=SoftBlue,minimum width=2.3cm,minimum height=0.9cm] (q) {Queries};
 \node[draw,rounded corners,fill=SoftBlue,below=of q,minimum width=2.3cm,minimum height=0.9cm] (d) {Documents};
 \node[draw,rounded corners,fill=SoftTeal,right=of q,minimum width=2.8cm,minimum height=0.9cm] (p1) {Shared preprocessing};
@@ -1987,7 +1964,7 @@ Embedding & A dense learned vector representation of text. \\ \midrule
 Bi-encoder & A model that encodes query and document separately. \\ \midrule
 Dense retrieval & Retrieval based on learned dense vectors and similarity search. \\ \midrule
 Similarity search & Finding items whose vectors are close to a query vector. \\ \midrule
-Recall-oriented candidate generator & A first-stage retriever that aims to keep many relevant items in the shortlist. \\
+Recall-oriented\\candidate generator & A first-stage retriever that aims to keep many relevant items in the shortlist. \\
 \bottomrule
 \end{longtable}
 
@@ -2106,6 +2083,16 @@ Hard negative & Plausible but wrong document used in training. \\ \midrule
 Holdout & Protected later evaluation split. \\ \midrule
 Hyperparameter & Experimenter-chosen setting such as top-k or bonus strength. \\ \midrule
 IDF & Inverse document frequency. \\ \midrule
+\bottomrule
+\end{longtable}
+
+\clearpage
+\begin{center}
+\textbf{Master glossary (continued)}
+\end{center}
+\begin{longtable}{p{0.24\textwidth}p{0.70\textwidth}}
+\toprule
+\textbf{Term} & \textbf{Meaning in plain language} \\ \midrule
 Leakage & Improper use of evaluation information during training or tuning. \\ \midrule
 MRR & Mean reciprocal rank. \\ \midrule
 Normalization & Making text more consistent. \\ \midrule
