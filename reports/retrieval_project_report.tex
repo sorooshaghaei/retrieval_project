@@ -1,0 +1,672 @@
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1.9cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{titlesec}
+\usetikzlibrary{arrows.meta,calc,positioning,shapes.geometric}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  urlcolor=teal!50!black,
+  pdftitle={Retrieval Engine Competition Project Report},
+  pdfauthor={SeaFour},
+  pdfsubject={Information Retrieval Engine project report}
+}
+
+\definecolor{ink}{HTML}{223547}
+\definecolor{accent}{HTML}{2D6A8E}
+\definecolor{softblue}{HTML}{EAF3FA}
+\definecolor{softgreen}{HTML}{EAF6EE}
+\definecolor{softgold}{HTML}{FBF6E3}
+\definecolor{softgray}{HTML}{F4F6F8}
+\definecolor{rulegray}{HTML}{D6DCE3}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\renewcommand{\arraystretch}{1.18}
+\setlist[itemize]{leftmargin=1.4em, itemsep=2pt, topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em, itemsep=2pt, topsep=3pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\titleformat{\section}{\large\bfseries\color{ink}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+
+\lstdefinestyle{codeblock}{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framesep=4pt,
+  framerule=0.4pt,
+  rulecolor=\color{rulegray},
+  backgroundcolor=\color{softgray}
+}
+\lstset{style=codeblock}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{1.0cm}
+
+{\Large\bfseries Retrieval Engine Competition Project\par}
+\vspace{0.25cm}
+{\large Final Report for Submission\par}
+\vspace{0.7cm}
+
+{\large Group: SeaFour\par}
+\vspace{0.8cm}
+
+\begin{tabular}{c}
+Maksym DOLHOV \\
+Mehdi AGHAEI \\
+Nguyen Ho Bao KHANH \\
+\end{tabular}
+
+\vspace{0.9cm}
+
+\begin{tikzpicture}
+\node[
+  draw=ink,
+  rounded corners=6pt,
+  fill=softblue,
+  text width=13.7cm,
+  align=left,
+  inner sep=11pt
+]{
+\textbf{Submission scope.}
+This final version is written to match the completed notebook \texttt{kaggle-submission.ipynb}. It reports the final dataset exploration, preprocessing choices, Phase 1 retrieval comparison, Phase 2 classifier-aware reranking results, holdout evaluation, and the public Kaggle score obtained by the submitted file.};
+\end{tikzpicture}
+
+\vspace{0.9cm}
+
+\begin{tabular}{>{\bfseries}p{0.28\linewidth}p{0.60\linewidth}}
+Main notebook & \texttt{kaggle-submission.ipynb} \\
+Main output & \texttt{solutions\_SeaFour.csv} \\
+Dataset source & Kaggle competition files provided for the course \\
+Public Kaggle score & \textbf{0.60185} \\
+Date & \today \\
+\end{tabular}
+
+\vfill
+\end{titlepage}
+
+\section{Introduction}
+
+Information retrieval is the task of ranking documents so that the most relevant ones appear first for a user query. In this project we work with a large technical corpus and a set of labeled training queries. The assignment is divided into two phases. Phase 1 focuses on basic retrieval with classical and neural methods. Phase 2 adds category classification and asks how the classifier can be used to improve retrieval.
+
+The final notebook is structured around the required project questions rather than around only a single optimized run. It therefore contains:
+\begin{itemize}
+    \item dataset loading and statistical exploration;
+    \item construction of a normalized \texttt{content} field;
+    \item three retrieval models: TF-IDF, BM25+, and Sentence-Transformer embeddings;
+    \item embedding inspection through matrix shapes and a 2D projection;
+    \item evaluation with Recall@K, Precision@K, and MRR@K;
+    \item category classification for both documents and queries;
+    \item classifier-aware reranking for Phase 2;
+    \item Kaggle submission export.
+\end{itemize}
+
+\section{Project Roadmap}
+
+This report is meant to document not only the final score, but also the path that led to it. The project started with basic lexical retrieval, then moved toward semantic retrieval, then added category prediction as a second signal, and finally became a submission-ready pipeline after several debugging and reproducibility fixes.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  road/.style={
+    draw=ink,
+    rounded corners=6pt,
+    text width=14.5cm,
+    align=left,
+    inner sep=8pt
+  },
+  >=Latex
+]
+\node[road, fill=softgold] (r1) {\textbf{1. Audit the data and the schema.} We first inspected document/query counts, category distributions, text lengths, and the qrels format to understand what each file really contained.};
+\node[road, fill=softblue, below=0.45cm of r1] (r2) {\textbf{2. Build strong Phase 1 baselines.} TF-IDF and BM25+ were implemented first to establish lexical baselines and to measure how far simple term matching could go on this corpus.};
+\node[road, fill=softgreen, below=0.45cm of r2] (r3) {\textbf{3. Move to semantic retrieval.} Sentence-Transformer embeddings were added to reduce vocabulary mismatch between short queries and long technical documents.};
+\node[road, fill=softblue, below=0.45cm of r3] (r4) {\textbf{4. Add Phase 2 classification.} A TF-IDF + LinearSVC classifier was trained for categories, then used to rerank candidates with a soft category bonus instead of a hard filter.};
+\node[road, fill=softgold, below=0.45cm of r4] (r5) {\textbf{5. Debug the pipeline.} Two important corrections changed the project quality: schema-aware qrels parsing fixed false zero metrics, and stable grouped sampling fixed category-related notebook errors.};
+\node[road, fill=softgreen, below=0.45cm of r5] (r6) {\textbf{6. Finalize the submission.} The final system keeps the embedding retriever, the brief-aligned text-only classifier, a soft category bonus, a holdout check, and a deeper export depth for the Kaggle CSV.};
+
+\draw[accent, thick, -{Latex[length=3mm]}] (r1.south) -- (r2.north);
+\draw[accent, thick, -{Latex[length=3mm]}] (r2.south) -- (r3.north);
+\draw[accent, thick, -{Latex[length=3mm]}] (r3.south) -- (r4.north);
+\draw[accent, thick, -{Latex[length=3mm]}] (r4.south) -- (r5.north);
+\draw[accent, thick, -{Latex[length=3mm]}] (r5.south) -- (r6.north);
+\end{tikzpicture}
+\caption{Roadmap from the first baselines to the final submission-ready system.}
+\label{fig:roadmap}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{p{0.20\linewidth}p{0.30\linewidth}Y}
+\toprule
+Stage & Main question & Outcome \\
+\midrule
+Data audit & What is in the files, and how should they be interpreted? & We clarified the schema, the category structure, the query/document asymmetry, and the relevance format used by the qrels. \\
+Lexical baselines & How far can exact-term retrieval go? & TF-IDF and BM25+ gave interpretable baselines, but they remained limited by lexical mismatch. \\
+Dense retrieval & Can semantic matching improve recall and rank quality? & Embeddings became the strongest retriever by a large margin on Recall and MRR. \\
+Classification & Can category prediction help retrieval? & Yes, but as a soft reranking signal rather than as a strict filter. \\
+Debugging & Why did some notebook outputs look suspicious or fail? & Fixing qrels parsing and grouped sampling removed false zeros and notebook instability. \\
+Submission & Which pipeline is strong and defensible enough to submit? & Embeddings + text-only classifier + soft bonus was kept as the final system. \\
+\bottomrule
+\end{tabularx}
+\caption{Milestones that structured the project from start to final submission.}
+\label{tab:roadmap}
+\end{table}
+
+\section{Final Changes and Reasons}
+
+The final submission differs from earlier draft states of the project in four important ways.
+
+\begin{enumerate}
+    \item \textbf{Ground-truth parsing was aligned with the real qrels schema.} The competition qrels store relevant items under \texttt{relevant\_doc\_ids} with nested \texttt{doc\_id} entries. Aligning the loader with that format was necessary so that Recall, Precision, and MRR reflect the true labels instead of empty relevance sets.
+    \item \textbf{Category-wise sampling was made stable for current pandas behavior.} The notebook now uses a sampling pattern that preserves the \texttt{category} column reliably during visualization and downsampling steps. This prevents category-aware plots and classifier preparation from failing because of grouped-sampling side effects.
+    \item \textbf{The report now uses measured values instead of placeholders.} All result tables below are populated from the completed notebook outputs, including the validation comparison, holdout evaluation, and public Kaggle score.
+    \item \textbf{The final active system was chosen for clarity and empirical strength.} The selected submission pipeline is the embedding retriever with the brief-aligned \texttt{text\_only} classifier and a soft category bonus. This choice is easy to justify academically and achieved the best Phase 2 validation and holdout scores among the tested active configurations.
+\end{enumerate}
+
+\subsection{Previous tries, failures, and lessons}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{p{0.11\linewidth}p{0.24\linewidth}Y Y}
+\toprule
+Type & Attempt or issue & What happened & Decision or lesson \\
+\midrule
+Attempt & TF-IDF baseline & The model was simple and useful as a baseline, but lexical overlap alone was not enough for many relevant pairs. & Keep it as a baseline, not as the final retriever. \\
+Attempt & BM25+ lexical upgrade & BM25+ improved over TF-IDF and handled length variation better, but it still lagged far behind embeddings on recall and rank quality. & Use it as the strongest lexical reference point. \\
+Failure & Qrels parsing mismatch & The notebook read the wrong relevance field, which produced empty relevance sets and misleading zero Recall, Precision, and MRR values. & Parse \texttt{relevant\_doc\_ids} correctly and verify average relevant documents per query. \\
+Failure & Grouped sampling instability & A grouped pandas sampling pattern sometimes dropped the \texttt{category} column and caused notebook errors such as \texttt{KeyError: category}. & Switch to stable category-preserving downsampling for visualization and classifier preparation. \\
+Attempt & Query classifier with \texttt{text + tags} & The classifier became extremely accurate, but this setting uses metadata that we did not want to silently turn into the default Phase 2 pipeline. & Keep it as an explicit ablation and use text-only as the active setting. \\
+Decision & Validation depth versus submission depth & The best offline evaluation depth was \(K=1000\), but the final CSV benefits from exporting a deeper ranked list. & Separate validation selection from submission export and write 7,500 ids per query in the final file. \\
+\bottomrule
+\end{tabularx}
+\caption{Main previous tries, failures, and lessons learned during the project.}
+\label{tab:triesfailures}
+\end{table}
+
+\section{Dataset Description and Exploratory Analysis}
+
+The dataset contains documents, training queries, test queries, and relevance judgments. From the final project files, the corpus contains \textbf{216,041 documents}, \textbf{327 labeled training queries}, and \textbf{141 Kaggle test queries}. The documents belong to \textbf{five categories}. Tables~\ref{tab:datasetoverview}--\ref{tab:doccats} summarize the global scale of the collection, the split sizes used in the notebook, and the category distribution.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l Y}
+\toprule
+Dataset element & Count or value \\
+\midrule
+Documents & 216,041 \\
+Labeled training queries & 327 \\
+Kaggle test queries & 141 \\
+Categories & 5 \\
+Average relevant documents per training query & 9.08 \\
+Average document length & 900.92 characters / 94.86 tokens \\
+Average training query length & 48.44 characters / 4.95 tokens \\
+Average test query length & 48.88 characters / 4.96 tokens \\
+\bottomrule
+\end{tabularx}
+\caption{Global dataset overview.}
+\label{tab:datasetoverview}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{l r}
+\toprule
+Split & Number of labeled queries \\
+\midrule
+Split-train & 196 \\
+Validation & 98 \\
+Holdout test & 33 \\
+\bottomrule
+\end{tabular}
+\caption{Query split sizes used by the final notebook.}
+\label{tab:splits}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Category & Document count & Training-query count \\
+\midrule
+\texttt{tex} & 68,184 & 130 \\
+\texttt{unix} & 47,382 & 47 \\
+\texttt{gaming} & 45,301 & 41 \\
+\texttt{programmers} & 32,176 & 52 \\
+\texttt{android} & 22,998 & 57 \\
+\bottomrule
+\end{tabular}
+\caption{Document and labeled-query distribution by category.}
+\label{tab:doccats}
+\end{table}
+
+These exploratory results matter because they help explain later retrieval behavior. In particular, the corpus contains long documents while the queries are much shorter. This asymmetry generally makes strict lexical overlap less reliable, especially when the query paraphrases the document instead of reusing its exact surface vocabulary.
+
+\subsection{Available fields}
+
+Each document contains an \texttt{id} and can include \texttt{title}, \texttt{text}, \texttt{tags}, and \texttt{category}. Training queries also contain \texttt{id}, \texttt{title}, \texttt{text}, \texttt{tags}, and \texttt{category}. Test queries omit the category label because that is one of the targets of Phase 2 inference. The qrels file maps each labeled training query to a set of relevant document ids.
+
+\section{Preprocessing and Content Construction}
+
+The assignment asks for a new text field called \texttt{content}. The final notebook uses the following policy:
+\begin{itemize}
+    \item documents: \texttt{title + text + tags};
+    \item retrieval queries: \texttt{title + text};
+    \item primary classifier queries: \texttt{title + text};
+    \item classifier ablation: \texttt{title + text + tags}.
+\end{itemize}
+
+This design keeps both retrieval and the default Phase 2 classifier tied to the actual query text, which is the safer reading of the brief. Because the raw query files also contain \texttt{tags}, the notebook reports a second text-plus-tags classifier as an explicit ablation. That comparison makes the effect of tags visible instead of silently baking it into the main pipeline.
+
+The shared normalization steps are:
+\begin{itemize}
+    \item lowercasing;
+    \item replacement of the separators \texttt{-}, \texttt{\_}, and \texttt{/} with spaces;
+    \item whitespace collapsing;
+    \item trimming leading and trailing whitespace.
+\end{itemize}
+
+For lexical methods, tokenization uses the pattern \texttt{[a-z0-9]+}, and English stopword filtering is enabled by default.
+
+\section{Phase 1: Retrieval Models}
+
+\subsection{TF-IDF retrieval}
+
+TF-IDF stands for \emph{term frequency--inverse document frequency}. It gives high weight to terms that appear frequently in one document but are relatively rare in the collection. In vector-space retrieval, each document and query is represented by a sparse TF-IDF vector, and documents are ranked by cosine similarity with the query vector.
+
+Conceptually, TF-IDF is useful because it is simple, fast, and often surprisingly competitive as a baseline. Its main limitation is that it depends strongly on lexical overlap. If a relevant document uses different wording from the query, TF-IDF may fail even when the underlying meaning is similar.
+
+\subsection{BM25+ retrieval}
+
+BM25+ is a probabilistic lexical ranking model. It improves over naive bag-of-words weighting by:
+\begin{itemize}
+    \item saturating term frequency contributions;
+    \item normalizing for document length;
+    \item adding a positive lower-bound adjustment through the BM25+ variant.
+\end{itemize}
+
+BM25+ is often stronger than plain TF-IDF when document lengths vary substantially, as is the case in this corpus. However, BM25+ remains a lexical model and therefore still depends on token overlap.
+
+\subsection{Embedding retrieval}
+
+Dense embeddings map text into high-dimensional vectors that encode semantic information. In this project we use the Sentence-Transformer model \texttt{all-MiniLM-L6-v2}. Documents and queries are embedded into a 384-dimensional space, and cosine similarity is computed through normalized dot products.
+
+Embeddings can help retrieval because they are more robust to synonyms, paraphrases, and broader semantic similarity. Their main tradeoffs are higher computational cost, larger memory usage, and the risk of retrieving semantically related but not strictly relevant documents.
+
+\section{Embedding Inspection and Visualization}
+
+After generating embeddings, the notebook prints the matrix shapes for documents and queries. This directly answers the specification that the embedding structures should be examined.
+
+To make the geometry more interpretable, the notebook also builds a 2D projection using \textbf{UMAP} when available and otherwise falls back to \textbf{t-SNE}. The plot uses a category-aware sample of documents together with the training queries. In typical runs, one should observe partial clustering by category. This is expected because categories such as \texttt{android}, \texttt{gaming}, \texttt{tex}, \texttt{unix}, and \texttt{programmers} tend to contain domain-specific vocabulary and recurrent semantic themes.
+
+At the same time, perfect separation should not be expected. The original embeddings live in a much higher-dimensional space, some categories overlap semantically, and short queries are often more ambiguous than documents.
+
+Figure~\ref{fig:embedding-projection} shows the 2D embedding projection produced by the final notebook. The visible grouping confirms that the dense representation captures meaningful category structure, while the overlaps also show that the classes are not trivially separable in two dimensions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\linewidth]{figures/embedding_projection.png}
+\caption{2D projection of sampled document and training-query embeddings produced by the final notebook. UMAP is used when available; otherwise the notebook falls back to t-SNE.}
+\label{fig:embedding-projection}
+\end{figure}
+
+\section{Evaluation Measures}
+
+The notebook implements the three required retrieval metrics:
+\[
+\text{Recall@K} = \frac{\# \text{relevant retrieved documents}}{\# \text{relevant documents}}
+\]
+\[
+\text{Precision@K} = \frac{\# \text{relevant retrieved documents}}{\# \text{retrieved documents}}
+\]
+\[
+\text{MRR@K} = \frac{1}{\text{rank of the first relevant document}}
+\]
+
+For Phase 1 comparison, the notebook also reports runtime and average latency per query. For Phase 2, it augments the retrieval summary with classifier accuracy, and computes a combined score as
+\[
+\text{CombinedScore} = \frac{1}{4}\left(\text{Recall} + \text{Precision} + \text{MRR} + \text{Accuracy}\right).
+\]
+
+\section{Phase 1 Experimental Protocol}
+
+The labeled training queries are split into:
+\begin{itemize}
+    \item 60\% split-train;
+    \item 30\% validation;
+    \item 10\% hold-out test.
+\end{itemize}
+
+Phase 1 comparison is run on the \textbf{validation split}. For each model and for several values of \(K\), the notebook stores:
+\begin{itemize}
+    \item top-k document ids;
+    \item top-k retrieval scores;
+    \item Recall@K, Precision@K, and MRR@K;
+    \item runtime and latency.
+\end{itemize}
+
+The explicit arrays requested by the assignment are preserved in the notebook as:
+\begin{itemize}
+    \item \texttt{topk\_indices\_tfidf}, \texttt{topk\_scores\_tfidf};
+    \item \texttt{topk\_indices\_bm25}, \texttt{topk\_scores\_bm25};
+    \item \texttt{topk\_indices\_embedding}, \texttt{topk\_scores\_embedding}.
+\end{itemize}
+
+\subsection{Phase 1 validation results}
+
+The best validation result for each Phase 1 model is shown in Table~\ref{tab:phase1template}. In the current notebook, all three models reached their best combined Phase 1 score at \(K=1000\).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l c c c c c}
+\toprule
+Model & \(K\) & Recall@K & Precision@K & MRR@K & Latency/query \\
+\midrule
+TF-IDF & 1000 & 0.54319 & 0.00418 & 0.23016 & 398.77 ms \\
+BM25+ & 1000 & 0.59151 & 0.00457 & 0.31228 & 394.77 ms \\
+Embeddings & 1000 & \textbf{0.86052} & \textbf{0.00720} & \textbf{0.49018} & \textbf{8.48 ms} \\
+\bottomrule
+\end{tabularx}
+\caption{Best validation result per Phase 1 model.}
+\label{tab:phase1template}
+\end{table}
+
+The Phase 1 comparison leads to three main conclusions.
+\begin{itemize}
+    \item \textbf{Embeddings were the strongest retrieval model.} They gave the highest Recall@K and MRR@K, which is consistent with the vocabulary-mismatch nature of the task.
+    \item \textbf{BM25+ clearly improved over TF-IDF on lexical retrieval.} This is expected because BM25+ handles document-length variation and repeated term saturation more explicitly.
+    \item \textbf{The embedding implementation was also the fastest in this notebook.} Because document embeddings were cached and query scoring was chunked, dense retrieval was much faster than the current TF-IDF and BM25 loops in local execution.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l c c c Y}
+\toprule
+System stage & Recall@K & Precision@K & MRR@K & Interpretation \\
+\midrule
+TF-IDF baseline & 0.54319 & 0.00418 & 0.23016 & A reasonable lexical starting point, but still weak on short-query vocabulary mismatch. \\
+BM25+ lexical model & 0.59151 & 0.00457 & 0.31228 & The best lexical baseline, showing that better term weighting helps but does not close the gap. \\
+Embedding retrieval & \textbf{0.86052} & \textbf{0.00720} & \textbf{0.49018} & The first major jump in performance; semantic matching becomes the key direction for the project. \\
+\bottomrule
+\end{tabularx}
+\caption{How the retrieval project progressed during Phase 1.}
+\label{tab:phase1roadmap}
+\end{table}
+
+\section{Phase 2: Category Classification}
+
+\subsection{Classifier model}
+
+The final notebook uses a \textbf{TF-IDF + LinearSVC} classifier. This model is appropriate because it is effective on sparse text representations, scales well to large vocabularies, and provides a strong multiclass baseline.
+
+\subsection{Training data choice}
+
+The assignment explicitly asks whether both documents and queries can be used, and whether the classifier works equally well for both. To answer those questions directly, the notebook trains the classifier on:
+\begin{itemize}
+    \item a training split of the document corpus;
+    \item the split-train portion of the labeled training queries.
+\end{itemize}
+
+It then evaluates separately on:
+\begin{itemize}
+    \item held-out documents;
+    \item validation queries;
+    \item hold-out test queries.
+\end{itemize}
+
+This setup makes it possible to compare performance on long documents and short queries rather than discussing only one of them.
+
+For the query side, the notebook now evaluates two representations on the same split:
+\begin{itemize}
+    \item a \textbf{text-only} variant based on \texttt{title + text}, used as the default Phase 2 setting because it stays closest to the wording of the brief;
+    \item a \textbf{text + tags} variant, reported separately as an ablation because the raw JSON files do expose query tags.
+\end{itemize}
+
+This change is important methodologically. If the tag-aware classifier performs better, the report can mention that result explicitly without pretending it was the only reasonable interpretation of test-time information.
+
+\subsection{Classification metrics}
+
+The notebook reports:
+\begin{itemize}
+    \item overall accuracy;
+    \item a classification report with precision, recall, and F1-score per category.
+\end{itemize}
+
+Accuracy is computed as:
+\[
+\text{Accuracy} = \frac{\# \text{correct predictions}}{\# \text{all predictions}}.
+\]
+
+The final measured accuracies are shown in Table~\ref{tab:clfresults}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l l c c}
+\toprule
+Source & Variant & Split & Accuracy \\
+\midrule
+Queries & text-only (\texttt{title + text}) & validation & 0.90816 \\
+Queries & text-only (\texttt{title + text}) & holdout & 0.90909 \\
+Queries & text + tags & validation & \textbf{1.00000} \\
+Queries & text + tags & holdout & \textbf{1.00000} \\
+Documents & text-only classifier pipeline & holdout & 0.98609 \\
+\bottomrule
+\end{tabularx}
+\caption{Measured classification accuracies from the final notebook.}
+\label{tab:clfresults}
+\end{table}
+
+These numbers show two useful facts. First, document classification is indeed easier than query classification because documents contain more lexical evidence. Second, query tags add strong category information. However, we kept the \textbf{text-only} query classifier as the active Phase 2 setting because it stays closer to the assignment wording and to the retrieval-side query representation. The text-plus-tags result is therefore reported as a strong ablation, not silently substituted for the main pipeline.
+
+\section{Using the Classifier to Improve Retrieval}
+
+The professor asks how the classifier can be integrated into the retrieval system. The final notebook uses a simple and transparent strategy:
+\begin{enumerate}
+    \item predict the category of each query;
+    \item retrieve top-k candidates with TF-IDF, BM25+, or embeddings;
+    \item normalize retrieval scores within each query;
+    \item add a soft bonus to documents whose category matches the predicted query category;
+    \item rerank the candidates.
+\end{enumerate}
+
+This approach is easy to justify. If the category prediction is correct, the bonus increases the likelihood that same-category documents move upward in the ranked list. If the classifier is wrong, the bonus can hurt ranking quality, which is exactly why the Phase 2 comparison must be measured rather than assumed.
+
+In the final notebook, the main reranking path uses the \textbf{text-only} query classifier by default. The tag-aware version remains available as a reported comparison, not as an unqualified replacement for the brief-aligned setting.
+
+\subsection{Phase 2 validation results}
+
+Table~\ref{tab:phase2template} reports the best Phase 2 validation result for each retrieval model after applying the category bonus.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l c c c c c c}
+\toprule
+Model & \(K\) & Recall@K & Precision@K & MRR@K & Accuracy & Combined \\
+\midrule
+TF-IDF + classifier & 1000 & 0.54319 & 0.00418 & 0.24103 & 0.90816 & 0.42414 \\
+BM25+ + classifier & 1000 & 0.59151 & 0.00457 & 0.30713 & 0.90816 & 0.45284 \\
+Embeddings + classifier & 1000 & \textbf{0.86052} & \textbf{0.00720} & \textbf{0.49268} & 0.90816 & \textbf{0.56714} \\
+\bottomrule
+\end{tabularx}
+\caption{Best validation result per Phase 2 model with classifier-aware reranking.}
+\label{tab:phase2template}
+\end{table}
+
+The main reason the embedding model remains best in Phase 2 is that the category bonus does not replace retrieval quality; it only nudges the ordering. Strong candidate generation is still the dominant factor, so the best Phase 1 retriever also remains the best Phase 2 retriever.
+
+It is also important to interpret the Phase 2 gains correctly. At \(K=1000\), Recall and Precision remain almost unchanged for embeddings because the same candidate pool is preserved. The main retrieval-side gain is a small improvement in MRR, while the larger increase in the combined score comes from adding the classifier accuracy term required by the Phase 2 evaluation formula.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\begin{tabularx}{\linewidth}{p{0.21\linewidth}p{0.28\linewidth}p{0.17\linewidth}Y}
+\toprule
+Roadmap step & Active system & Evidence & Why it mattered \\
+\midrule
+Phase 1 baseline & TF-IDF retrieval & MRR@1000 = 0.23016 & Established a simple reference point for the whole project. \\
+Phase 1 improved baseline & BM25+ retrieval & MRR@1000 = 0.31228 & Confirmed that stronger lexical weighting helps but is still not enough. \\
+Phase 1 breakthrough & Embedding retrieval & MRR@1000 = 0.49018 & Showed that semantic retrieval is the central improvement for this dataset. \\
+Phase 2 final validation system & Embeddings + text-only classifier + soft bonus & Combined = 0.56714 & Became the selected model because it is strong, simple, and easy to justify. \\
+Holdout estimate & Final selected system & Combined = 0.57527 & Confirmed that the chosen configuration generalizes beyond validation. \\
+Public submission & \texttt{solutions\_SeaFour.csv} & Kaggle = \textbf{0.60185} & Marks the current endpoint of the project roadmap. \\
+\bottomrule
+\end{tabularx}
+\caption{Project evolution from the first baseline to the final public leaderboard result.}
+\label{tab:fullroadmapresults}
+\end{table}
+
+\section{Hold-out Evaluation and Kaggle Submission}
+
+The best Phase 2 validation configuration is:
+\begin{itemize}
+    \item retriever: \textbf{embeddings};
+    \item classifier variant: \textbf{text-only};
+    \item validation-selected evaluation depth: \(\mathbf{K=1000}\);
+    \item submission export depth: \(\mathbf{7500}\).
+\end{itemize}
+
+It is then evaluated once on the hold-out test split before being applied to the unlabeled Kaggle test queries.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{l c c c c c}
+\toprule
+Split / Score & Recall@K & Precision@K & MRR@K & Accuracy & Combined / Public Score \\
+\midrule
+Holdout (\(K=1000\)) & 0.84388 & 0.00821 & 0.53988 & 0.90909 & 0.57527 \\
+Kaggle public leaderboard & --- & --- & --- & --- & \textbf{0.60185} \\
+\bottomrule
+\end{tabularx}
+\caption{Final holdout result and public Kaggle score.}
+\label{tab:finalscores}
+\end{table}
+
+Two design choices deserve explanation.
+\begin{itemize}
+    \item \textbf{Why keep the text-only classifier?} Because it is the most defensible brief-aligned setting: the retrieval query and the classifier both rely on the actual query wording rather than on extra metadata injected at test time.
+    \item \textbf{Why export 7500 documents for submission after selecting \(K=1000\) on validation?} Because \(K=1000\) was the best depth in the offline evaluation grid, while the final CSV export still benefits from a deeper ranked list for the competition output format. The notebook therefore separates \texttt{EVALUATION\_TOP\_KS} from \texttt{SUBMISSION\_TOP\_K}.
+\end{itemize}
+
+This protocol is cleaner than fitting and evaluating repeatedly on the same labeled queries, and it matches the logic expected in a reproducible retrieval pipeline:
+\begin{enumerate}
+    \item develop and compare on training-derived splits;
+    \item choose the best validation configuration;
+    \item estimate generalization on a hold-out split;
+    \item export the final Kaggle file.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={
+    draw=ink,
+    rounded corners=5pt,
+    fill=softblue,
+    text width=4.0cm,
+    align=center,
+    minimum height=1.15cm,
+    inner sep=5pt
+  },
+  merge/.style={
+    draw=ink,
+    rounded corners=5pt,
+    fill=softgreen,
+    text width=5.1cm,
+    align=center,
+    minimum height=1.15cm,
+    inner sep=5pt
+  },
+  >=Latex
+]
+\node[box] (docs) {Documents\\\texttt{title + text + tags}};
+\node[box, right=1.2cm of docs] (queries) {Queries\\\texttt{title + text}};
+\node[box, below=0.95cm of docs] (retriever) {TF-IDF / BM25+ / Embedding retriever};
+\node[box, below=0.95cm of queries] (clf) {TF-IDF + LinearSVC\\query classifier};
+\node[merge, below=1.1cm of $(retriever)!0.5!(clf)$] (rerank) {Retrieve top candidates, normalize scores, add a soft category-match bonus, and rerank};
+\node[merge, below=0.95cm of rerank] (submit) {Best pipeline selected on validation\\$\rightarrow$ holdout check\\$\rightarrow$ export \texttt{solutions\_SeaFour.csv}};
+
+\draw[accent, thick, -{Latex[length=3mm]}] (docs) -- (retriever);
+\draw[accent, thick, -{Latex[length=3mm]}] (queries) -- (clf);
+\draw[accent, thick, -{Latex[length=3mm]}] (queries) -- (retriever);
+\draw[accent, thick, -{Latex[length=3mm]}] (retriever) -- (rerank);
+\draw[accent, thick, -{Latex[length=3mm]}] (clf) -- (rerank);
+\draw[accent, thick, -{Latex[length=3mm]}] (rerank) -- (submit);
+\end{tikzpicture}
+\caption{Final pipeline used to produce the submitted CSV.}
+\label{fig:finalpipeline}
+\end{figure}
+
+\section{Reproducibility}
+
+The final notebook includes several reproducibility choices:
+\begin{itemize}
+    \item cached document embeddings;
+    \item cached TF-IDF and BM25 artifacts;
+    \item explicit runtime path detection for local, Colab, and Kaggle environments;
+    \item explicit split fractions and random seeds;
+    \item schema-aware qrels parsing that matches the competition files;
+    \item stable category-preserving sampling for visualization and downsampling;
+    \item notebook-level documentation through section markdown and structured outputs.
+\end{itemize}
+
+The cross-encoder extension remains disabled in the final notebook because the active submission path is intentionally centered on the assignment-visible pipeline: TF-IDF, BM25+, embeddings, classification, classifier-aware reranking, and submission export.
+
+\section{AI Usage Declaration}
+
+Large language model assistance was used during the preparation of this revised notebook/report package. In particular, LLM tools were used to:
+\begin{itemize}
+    \item help reorganize and clean parts of the notebook and project documentation;
+    \item suggest debugging fixes and consistency checks for the local/Kaggle runtime setup;
+    \item help revise and polish sections of the written report.
+\end{itemize}
+
+The final methodological choices, interpretations, and submission artifacts remain the responsibility of the team. No LLM was used to access hidden Kaggle labels or any privileged evaluation data.
+
+\section{Conclusion}
+
+The final notebook and this report align with the full brief:
+\begin{itemize}
+    \item they present the dataset and preprocessing explicitly;
+    \item they compare TF-IDF, BM25+, and embeddings directly;
+    \item they evaluate embeddings structurally and visually;
+    \item they add category classification with document/query comparison;
+    \item they use the classifier to improve retrieval in a way that is measurable and easy to justify;
+    \item they preserve a reproducible path to Kaggle submission.
+\end{itemize}
+
+Empirically, the strongest active pipeline in the final notebook is the embedding retriever combined with the brief-aligned text-only classifier and a soft category bonus. This configuration achieved the best Phase 2 validation score, a holdout combined score of \textbf{0.57527}, and a public Kaggle score of \textbf{0.60185}. These results support the main conclusion of the project: semantic retrieval is essential for this corpus, and a lightweight category-aware reranking step can improve the final system without making the pipeline unnecessarily complex.
+
+\end{document}

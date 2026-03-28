@@ -30,6 +30,7 @@ wandb/
 mlruns/
 lightning_logs/
 tensorboard/
+solutions_*.csv
 
 # Reports (build artifacts)
 reports/**/*.aux
@@ -43,6 +44,20 @@ reports/**/*.fdb_latexmk
 reports/**/*.fls
 reports/build/
 reports/~$*
+
+# Guide PDF build artifacts
+guide_pdf/**/*.aux
+guide_pdf/**/*.bbl
+guide_pdf/**/*.blg
+guide_pdf/**/*.log
+guide_pdf/**/*.out
+guide_pdf/**/*.toc
+guide_pdf/**/*.synctex.gz
+guide_pdf/**/*.fdb_latexmk
+guide_pdf/**/*.fls
+guide_pdf/**/*.listing
+guide_pdf/build/
+guide_pdf/~$*
 
 # Logs & env
 *.log

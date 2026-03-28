@@ -1,120 +1,192 @@
 # Retrieval Project Pipeline
 
+## Goal
+
+Build a retrieval engine for the competition with:
+
+- Phase 1: compare `TF-IDF`, `BM25+`, and embedding retrieval
+- Phase 2: add category classification and use it to improve ranking
+
 ## Inputs
 
-The notebook expects these files in `data/`:
+The notebook expects the following files in `data/`:
 
-| File | Description |
-|------|-------------|
-| `docs.json` | 216,041 documents (`id`, `title`, `text`, `tags`, `category`) |
-| `queries_train.json` | 327 training queries |
-| `queries_test.json` | 141 test queries |
-| `qgts_train.json` | Training relevance judgments |
-| `submission.csv` | Sample submission template |
+| File | Role |
+|---|---|
+| `docs.json` | full document corpus |
+| `queries_train.json` | labeled training queries |
+| `queries_test.json` | Kaggle test queries |
+| `qgts_train.json` | qrels for training queries |
+| `submission.csv` | Kaggle submission template |
 
-## Runtime Path Resolution
+Qrels schema note:
 
-The notebook auto-detects runtime and resolves paths as follows:
-- `kaggle`: `/kaggle/input/competitions/retrieval-engine-competition`
-- `colab`: mounted Google Drive project folder
-- `local`: nearest `data/` folder from current working directory
+- the final notebook reads relevance from `relevant_doc_ids`
+- each relevant item contains a nested `doc_id`
 
-Output defaults to `solutions_SeaFour.csv` at the project root.
+## Preprocessing
 
-## Shared Preprocessing
+The final notebook builds normalized `content` as follows:
 
-All retrievers use normalized `content` text:
-- Documents: `title + text + tags`
-- Retrieval queries: `title + text`
-- Classifier queries: `title + text + tags`
+- documents: `title + text + tags`
+- retrieval queries: `title + text`
+- primary classifier queries: `title + text`
+- classifier ablation: `title + text + tags`
 
-Normalization includes:
-- lowercasing
-- separator replacement for `-_/`
-- whitespace collapsing
-- trimming
+Normalization:
 
-Tokenization uses `TOKEN_PATTERN = [a-z0-9]+`.
+- lowercase
+- replace `-`, `_`, `/` with spaces
+- collapse repeated whitespace
+- trim leading and trailing whitespace
 
-For lexical components (TF-IDF, classifier TF-IDF, BM25 tokenization), English stopword filtering is enabled by default:
-- `STOPWORD_FILTER_ENABLED = True`
-- `STOPWORD_LANGUAGE = "english"`
-- optional `CUSTOM_STOPWORDS`
+Tokenization pattern:
 
-The notebook now separates:
-- fit-free normalization: lowercasing, separator cleanup, whitespace cleanup, and shared `content` construction
-- learned preprocessing: the classifier TF-IDF vectorizer, which is fit only on the split-train query set and then reused unchanged on validation, hold-out test, and production queries
+```text
+[a-z0-9]+
+```
 
-## Retrieval Components
+Lexical components use English stopword filtering.
 
-| Component | Status | Role |
-|-----------|--------|------|
-| TF-IDF retriever | Implemented | Lexical baseline (`TfidfVectorizer`, cosine similarity) |
-| BM25+ retriever | Implemented | Lexical baseline (`rank-bm25`) |
-| Embedding retriever | Active | First-stage dense retrieval (`all-MiniLM-L6-v2`) |
-| Query category classifier | Active | TF-IDF + LinearSVC category prediction fit on split-train queries |
-| Cross-encoder reranker | Active | Second-stage reranking (`cross-encoder/ms-marco-MiniLM-L6-v2`) |
+## Full pipeline
 
-## Active Execution Flow
+### 1. Load and validate data
 
-1. Load data and validate schemas/ids.
-2. Build normalized `content` fields.
-3. Split the 327 labeled queries stratified into:
-- 196 split-train queries
-- 98 validation queries
-- 33 hold-out test queries
-4. Build/load cached document-side artifacts:
-- TF-IDF and BM25 indexes
-- document embeddings
-- sentence-transformer weights
-5. Fit the query category classifier on `split_train_queries_classifier_df` only.
-6. Reuse that same fitted classifier transform to predict categories for:
-- split-train queries
-- validation queries
-- hold-out test queries
-- production test queries
-7. Train/load the cross-encoder on `split_train_queries_df` and `train_ground_truth` only.
-8. Run first-stage retrieval (`embedding`) on the validation queries with `top_k=7500`.
-9. Rerank the validation results with the cross-encoder using:
-- `rerank_top_m = 150`
-- soft category bonus `= 2.0` when `ENABLE_CATEGORY_BOOST = True`
-10. Score the validation ranking with:
+The notebook:
+
+- loads documents, train queries, test queries, qrels, and the submission template
+- checks required columns
+- checks id uniqueness
+- resolves runtime paths for local / Colab / Kaggle execution
+
+### 2. Build task-specific text
+
+The notebook constructs `content` fields for:
+
+- retrieval documents
+- retrieval queries
+- classifier query variants
+
+This keeps the active retrieval path aligned with the query text while still measuring the effect of query tags on classification.
+
+### 3. Explore the dataset
+
+The notebook reports:
+
+- corpus sizes
+- document and query length statistics
+- category counts
+- relevant-documents-per-query statistics
+
+### 4. Build retrieval artifacts
+
+The notebook prepares three retrieval methods:
+
+1. TF-IDF
+2. BM25+
+3. embeddings with `all-MiniLM-L6-v2`
+
+Artifacts are cached to avoid rebuilding large indexes and embeddings on every run.
+
+### 5. Inspect embeddings
+
+The notebook:
+
+- prints document and query embedding shapes
+- samples documents by category
+- projects embeddings to 2D with `UMAP` or fallback `t-SNE`
+
+### 6. Split labeled queries
+
+Training queries are split stratified by category into:
+
+- `60%` train
+- `30%` validation
+- `10%` holdout test
+
+The classifier also uses a separate document holdout evaluation.
+
+### 7. Phase 1 retrieval comparison
+
+The validation split is used to compare the three retrieval models on:
+
 - Recall@K
 - Precision@K
 - MRR@K
-- category accuracy
-- combined score = average of the four metrics
-11. Keep the best validation configuration and run it once on the hold-out test split.
-12. Run on production test queries and write the Kaggle-format CSV with the same train-fitted classifier and the same trained cross-encoder.
+- runtime / latency
 
-## Key Configuration (Current Defaults)
+Best Phase 1 validation result:
 
-| Parameter | Default |
-|-----------|---------|
-| `FINAL_MODEL` | `embedding` |
-| `EVALUATION_MODELS` | `("embedding",)` |
-| `EVALUATION_TOP_KS` | `(7500,)` |
-| `SUBMIT_TOP_K` | `7500` |
-| `TRAIN_FRACTION` | `0.60` |
-| `VALIDATION_FRACTION` | `0.30` |
-| `TEST_FRACTION` | `0.10` |
-| `ENABLE_CROSS_ENCODER_RERANK` | `True` |
-| `CROSS_ENCODER_TRAIN_QUERY_LIMIT` | `327` |
-| `CROSS_ENCODER_RERANK_TOP_M` | `150` |
-| `CROSS_ENCODER_HARD_NEGATIVE_TOP_K` | `200` |
-| `ENABLE_CATEGORY_BOOST` | `True` |
-| `CATEGORY_MATCH_BONUS` | `2.0` |
+- model: `embedding`
+- `K = 1000`
+- Recall: `0.86052`
+- Precision: `0.00720`
+- MRR: `0.49018`
 
-## How To Run
+### 8. Phase 2 category classification
 
-Open `kaggle/kaggle-submissione.ipynb` and run all cells.
+The notebook trains a `TF-IDF + LinearSVC` classifier on:
 
-## Important Note
+- training documents
+- split-train queries
 
-The current saved notebook is now leakage-safe with respect to the query-side fitted preprocessing and reranker: the classifier TF-IDF transform and the cross-encoder are fit only on the split-train queries, validation is used for selection, hold-out test is used once for offline estimation, and production test queries reuse the same fitted artifacts without refitting.
+It evaluates classification on:
 
-## Outputs
+- held-out documents
+- validation queries
+- holdout queries
 
-- Submission CSV: `solutions_SeaFour.csv`
-- Updated report source: `reports/retrieval_project_report_updated.tex`
-- Updated report PDF: `reports/retrieval_project_report_updated.pdf`
+Two query variants are reported:
+
+- `text_only` = `title + text`
+- `text_plus_tags` = `title + text + tags`
+
+The active submission path keeps `text_only` as the default variant.
+
+### 9. Phase 2 classifier-aware reranking
+
+For each retrieval model:
+
+1. predict the query category
+2. retrieve top-k candidate documents
+3. min-max normalize scores row-wise
+4. add a soft category bonus for category matches
+5. rerank the candidate list
+
+Best Phase 2 validation result:
+
+- model: `embedding`
+- classifier variant: `text_only`
+- `K = 1000`
+- Recall: `0.86052`
+- Precision: `0.00720`
+- MRR: `0.49268`
+- Accuracy: `0.90816`
+- Combined score: `0.56714`
+
+### 10. Holdout check and Kaggle submission
+
+The validation winner is evaluated once on the holdout split, then exported to Kaggle.
+
+Best holdout result:
+
+- model: `embedding`
+- classifier variant: `text_only`
+- `K = 1000`
+- Combined score: `0.57527`
+
+Submission export:
+
+- export depth: `7500`
+- output file: `solutions_SeaFour.csv`
+- public Kaggle score: `0.60185`
+
+## Reproducibility notes
+
+- document embeddings are cached
+- lexical artifacts are cached
+- classifier artifacts are cached
+- category-preserving sampling is used for projection and downsampling
+- the document corpus is indexed once and reused
+- the active notebook is `kaggle/kaggle-submission.ipynb`
+- cross-encoder reranking is not part of the active submission path

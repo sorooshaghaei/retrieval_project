@@ -1,8 +1,10 @@
 numpy
 pandas
+matplotlib
 scikit-learn
 rank-bm25
 sentence-transformers
 torch
-datasets
+umap-learn
 jupyter
+ipywidgets
