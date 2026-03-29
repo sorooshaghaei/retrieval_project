@@ -1379,6 +1379,8 @@ It does not rely on joint neural text understanding. It uses sparse engineered f
 \section*{Why it fits retrieval pipelines well}
 Because TF--IDF features are already natural in text systems, and the classifier can often be trained and applied cheaply compared with heavier neural models.
 
+BM25 is generally stronger for document retrieval and ranking, but TF--IDF can outperform BM25-style lexical scoring in supervised classification when paired with a strong linear model such as LinearSVC.
+
 \begin{warningbox}
 Do not confuse LinearSVC with retrieval scoring. It predicts categories; it does not directly rank the corpus for a query.
 \end{warningbox}

@@ -434,6 +434,8 @@ Embedding retrieval & \textbf{0.85902} & \textbf{0.00827} & \textbf{0.50574} & T
 
 The final notebook uses a \textbf{TF-IDF + LinearSVC} classifier. This choice is motivated by the fact that Phase 2 is a \emph{classification} problem rather than a retrieval problem: given one text, the system must assign one category label.
 
+BM25 is generally better for document retrieval and ranking, but TF-IDF can outperform BM25-style lexical scoring in classification tasks, especially when paired with a strong linear model such as LinearSVC.
+
 \textbf{TF-IDF} converts each text into a sparse weighted vocabulary vector. Terms that are frequent inside one text but not frequent across the whole corpus receive larger weights. This representation is a strong fit for category prediction in this dataset because categories are often signaled by distinctive technical vocabulary. In other words, exact words such as package names, tools, commands, platforms, or domain-specific expressions often carry strong evidence about the correct label.
 
 \textbf{LinearSVC} is a linear Support Vector Machine classifier. In practice, it learns a set of weights over the TF-IDF features and gives each class a score, then predicts the class with the highest score. Linear SVMs are a standard choice for text classification because they work very well with high-dimensional sparse vectors, train quickly, and provide a strong multiclass baseline that is easy to reproduce.
