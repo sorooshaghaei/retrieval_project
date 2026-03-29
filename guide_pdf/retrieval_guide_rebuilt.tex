@@ -1383,6 +1383,10 @@ Because TF--IDF features are already natural in text systems, and the classifier
 Do not confuse LinearSVC with retrieval scoring. It predicts categories; it does not directly rank the corpus for a query.
 \end{warningbox}
 
+\begin{warningbox}
+High classification accuracy does not automatically mean the experimental design is clean. If extra fields such as tags, metadata tokens, or site-specific labels are almost unique to one class, the model may be reading the label indirectly. In that case the right response is to report that representation as label-revealing and keep it separate from the main pipeline.
+\end{warningbox}
+
 \begin{selfcheckbox}
 \textbf{1.} What does the input vector $\vect{x}$ represent in this pipeline?\\
 \textbf{2.} What does it mean if a term has a strong positive weight for one class?\\
@@ -1531,6 +1535,10 @@ In Kaggle-style setups, the public test queries may have no visible relevance la
 \begin{examplebox}
 \textbf{Project note.} In the retrieval-engine dataset used in this project, the files are \code{queries\_train.json}, \code{qgts\_train.json}, and unlabeled \code{queries\_test.json}. That means the clean default protocol is: split the labeled training queries into train and validation, then keep \code{queries\_test.json} only for final submission. Calling an extra internal slice of \code{queries\_train.json} a second ``test'' split is misleading, because the dataset already provides the real final test file. In addition, qrels parsing should be checked explicitly: if the parsed relevance sets are empty or do not line up with the labeled queries, the experiment should stop with an error rather than silently report false zero metrics.
 \end{examplebox}
+
+\begin{warningbox}
+\textbf{Project audit note.} Leakage is not only about using the wrong split. It can also happen through label-revealing metadata. In this project, the query \code{tags} field was later audited and found to be category-pure in the labeled query set. That means a query classifier using \code{title + text + tags} can achieve a suspiciously perfect score without any train/validation contamination bug. The correct interpretation is methodological target leakage through metadata, so the brief-aligned \code{title + text} classifier should remain the main model and the tag-aware version should stay an ablation only.
+\end{warningbox}
 
 \begin{formulabox}
 The split logic can be summarized as
@@ -2046,6 +2054,7 @@ This cheat sheet is not a substitute for the full guide. It is a memory aid for 
 \item Sparse representations emphasize lexical overlap; dense representations emphasize learned semantic closeness.
 \item Bi-encoders scale to large corpora; cross-encoders usually rerank shortlists.
 \item Validation chooses settings; an optional holdout can check the chosen system; unlabeled test is for final output, not offline tuning.
+\item Metadata such as tags can be useful, but if they are nearly identical to the class labels, they should be treated as a label-revealing ablation rather than as the main classifier input.
 \end{itemize}
 
 \section*{Formula reminders}

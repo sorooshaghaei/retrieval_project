@@ -78,13 +78,15 @@ The notebook auto-detects the execution environment:
 ## Key results
 
 - Best Phase 1 validation model: `embedding` at `K=1000`
-- Best Phase 2 validation model: `embedding + text_only classifier` at `K=1000`
-- Best Phase 2 validation combined score: `0.57342`
-- Latest public Kaggle score: `0.60007` from the corrected notebook submission
+- Best Phase 2 validation model: `embedding + text_only classifier + soft bonus + blended cross-encoder rerank (top 100)` at `K=1000`
+- Best Phase 2 validation combined score: `0.57361`
+- Latest public Kaggle score: `0.60007` from the most recent submitted corrected CSV before the new active cross-encoder export
 
 ## Notes
 
 - The notebook uses a corrected `70 / 30` train / validation split on labeled training queries and keeps `queries_test.json` as the only final test set.
 - The classifier is evaluated separately on held-out documents and validation queries.
-- Query classification is reported for both `text_only` and `text_plus_tags`, but the active submission pipeline keeps `text_only` as the brief-aligned default.
-- Cross-encoder reranking is not part of the active submission path.
+- The classifier leakage audit found no code/data leakage bug, no `queries_test.json` contamination, and no exact duplicate overlap between split-train and validation queries.
+- Query classification is reported for both `text_only` and `text_plus_tags`, but `text_plus_tags` is kept only as an ablation because the query tags are label-revealing and act as methodological target leakage in this dataset.
+- Cross-encoder reranking is now part of the active notebook submission path, applied only to the top 100 candidates and blended with the classifier-aware base score.
+- The newly regenerated cross-encoder export has not been assigned a new Kaggle public score in this repo yet.
