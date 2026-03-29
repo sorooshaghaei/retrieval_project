@@ -16,7 +16,7 @@ The final pipeline uses:
 - soft category-aware reranking through a category bonus
 - Kaggle submission export to `solutions_SeaFour.csv`
 
-Final public Kaggle score: `0.60185`
+Latest confirmed public Kaggle score in this repo: `0.60185` from the earlier submission before the query-split correction
 
 ## Repository contents
 
@@ -64,7 +64,7 @@ If `umap-learn` is unavailable, the notebook falls back automatically to `t-SNE`
    - Phase 1 retrieval comparison
    - classifier evaluation on queries and documents
    - Phase 2 reranking comparison
-   - holdout evaluation summary
+   - validation-selected model summary
 5. Export the generated `solutions_SeaFour.csv` file for Kaggle.
 
 ## Runtime behavior
@@ -79,12 +79,12 @@ The notebook auto-detects the execution environment:
 
 - Best Phase 1 validation model: `embedding` at `K=1000`
 - Best Phase 2 validation model: `embedding + text_only classifier` at `K=1000`
-- Holdout combined score: `0.57527`
-- Public Kaggle score: `0.60185`
+- Best Phase 2 validation combined score: `0.57342`
+- Previous public Kaggle score: `0.60185` before the query-split correction
 
 ## Notes
 
-- The notebook uses a `60 / 30 / 10` train / validation / holdout split on labeled training queries.
-- The classifier is evaluated separately on held-out documents and held-out queries.
+- The notebook uses a corrected `70 / 30` train / validation split on labeled training queries and keeps `queries_test.json` as the only final test set.
+- The classifier is evaluated separately on held-out documents and validation queries.
 - Query classification is reported for both `text_only` and `text_plus_tags`, but the active submission pipeline keeps `text_only` as the brief-aligned default.
 - Cross-encoder reranking is not part of the active submission path.

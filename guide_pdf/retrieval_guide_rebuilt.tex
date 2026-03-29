@@ -1528,12 +1528,16 @@ Suppose you try ten values of \code{top\_k} and pick the best one by looking at 
 \section*{Why the final unlabeled test is different}
 In Kaggle-style setups, the public test queries may have no visible relevance labels. That means they can be used to generate a submission, but not to compute honest offline metrics during development.
 
+\begin{examplebox}
+\textbf{Project note.} In the retrieval-engine dataset used in this project, the files are \code{queries\_train.json}, \code{qgts\_train.json}, and unlabeled \code{queries\_test.json}. That means the clean default protocol is: split the labeled training queries into train and validation, then keep \code{queries\_test.json} only for final submission. Calling an extra internal slice of \code{queries\_train.json} a second ``test'' split is misleading, because the dataset already provides the real final test file. In addition, qrels parsing should be checked explicitly: if the parsed relevance sets are empty or do not line up with the labeled queries, the experiment should stop with an error rather than silently report false zero metrics.
+\end{examplebox}
+
 \begin{formulabox}
 The split logic can be summarized as
 \[
 \begin{aligned}
 &\text{fit on train} \rightarrow \text{choose on validation}\\
-&\rightarrow \text{check once on holdout} \rightarrow \text{submit on unlabeled test}
+&\rightarrow \text{optionally check once on holdout} \rightarrow \text{submit on unlabeled test}
 \end{aligned}
 \]
 The formula is not mathematical; it is a protocol. The order matters.
@@ -1833,7 +1837,7 @@ This final chapter integrates the full learning path. Its goal is not to introdu
 \end{purposebox}
 
 \section*{End-to-end summary}
-A retrieval pipeline begins with text representation. Raw documents and queries are normalized and turned into forms that models can use. Sparse lexical models such as TF--IDF and BM25 measure weighted token overlap. Dense semantic models such as bi-encoders map texts into an embedding space where paraphrases can still be close. Because first-stage retrieval must remain scalable, it often serves as a candidate generator. A second-stage reranker, especially a cross-encoder, can then inspect the best candidates more carefully. A classifier may provide a soft topical hint. Evaluation separates training, validation, holdout checking, and final unlabeled submission. Engineering makes the whole process practical through caching, chunking, and efficient top-$k$ selection.
+A retrieval pipeline begins with text representation. Raw documents and queries are normalized and turned into forms that models can use. Sparse lexical models such as TF--IDF and BM25 measure weighted token overlap. Dense semantic models such as bi-encoders map texts into an embedding space where paraphrases can still be close. Because first-stage retrieval must remain scalable, it often serves as a candidate generator. A second-stage reranker, especially a cross-encoder, can then inspect the best candidates more carefully. A classifier may provide a soft topical hint. Evaluation separates training, validation, optional holdout checking, and final unlabeled submission. Engineering makes the whole process practical through caching, chunking, and efficient top-$k$ selection.
 
 \section*{What each stage adds}
 \begin{center}
@@ -1847,7 +1851,7 @@ Dense bi-encoder retrieval & Better semantic coverage and paraphrase recovery \\
 Candidate set & Makes later expensive judgment possible \\
 Cross-encoder reranking & Better local precision among plausible candidates \\
 Category classifier & Weak topical prior or soft bonus \\
-Validation and holdout protocol & Honest selection and credible reporting \\
+Validation and optional holdout protocol & Honest selection and credible reporting \\
 Engineering & Feasible runtime and reproducible experimentation \\
 \bottomrule
 \end{tabularx}
@@ -2041,7 +2045,7 @@ This cheat sheet is not a substitute for the full guide. It is a memory aid for 
 \item Retrieval ranks documents for a query; classification predicts a category for one input.
 \item Sparse representations emphasize lexical overlap; dense representations emphasize learned semantic closeness.
 \item Bi-encoders scale to large corpora; cross-encoders usually rerank shortlists.
-\item Validation chooses settings; holdout checks the chosen system; unlabeled test is for final output, not offline tuning.
+\item Validation chooses settings; an optional holdout can check the chosen system; unlabeled test is for final output, not offline tuning.
 \end{itemize}
 
 \section*{Formula reminders}

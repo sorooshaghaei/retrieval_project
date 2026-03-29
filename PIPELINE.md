@@ -98,11 +98,10 @@ The notebook:
 
 ### 6. Split labeled queries
 
-Training queries are split stratified by category into:
+Because `queries_test.json` is already the official unlabeled competition test set, the labeled training queries are split stratified by category only into:
 
-- `60%` train
+- `70%` train
 - `30%` validation
-- `10%` holdout test
 
 The classifier also uses a separate document holdout evaluation.
 
@@ -119,9 +118,9 @@ Best Phase 1 validation result:
 
 - model: `embedding`
 - `K = 1000`
-- Recall: `0.86052`
-- Precision: `0.00720`
-- MRR: `0.49018`
+- Recall: `0.85902`
+- Precision: `0.00827`
+- MRR: `0.50574`
 
 ### 8. Phase 2 category classification
 
@@ -134,7 +133,7 @@ It evaluates classification on:
 
 - held-out documents
 - validation queries
-- holdout queries
+- `queries_test.json` for prediction only (no offline accuracy)
 
 Two query variants are reported:
 
@@ -158,28 +157,21 @@ Best Phase 2 validation result:
 - model: `embedding`
 - classifier variant: `text_only`
 - `K = 1000`
-- Recall: `0.86052`
-- Precision: `0.00720`
-- MRR: `0.49268`
-- Accuracy: `0.90816`
-- Combined score: `0.56714`
+- Recall: `0.85902`
+- Precision: `0.00827`
+- MRR: `0.50720`
+- Accuracy: `0.91919`
+- Combined score: `0.57342`
 
-### 10. Holdout check and Kaggle submission
+### 10. Validation-selected export and Kaggle submission
 
-The validation winner is evaluated once on the holdout split, then exported to Kaggle.
-
-Best holdout result:
-
-- model: `embedding`
-- classifier variant: `text_only`
-- `K = 1000`
-- Combined score: `0.57527`
+The validation winner is exported directly to the unlabeled Kaggle queries after the corrected split change.
 
 Submission export:
 
 - export depth: `7500`
 - output file: `solutions_SeaFour.csv`
-- public Kaggle score: `0.60185`
+- previous public Kaggle score: `0.60185` before the query-split correction
 
 ## Reproducibility notes
 
