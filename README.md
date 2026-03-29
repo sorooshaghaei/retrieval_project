@@ -16,7 +16,7 @@ The final pipeline uses:
 - soft category-aware reranking through a category bonus
 - Kaggle submission export to `solutions_SeaFour.csv`
 
-Latest confirmed public Kaggle score in this repo: `0.60185` from the earlier submission before the query-split correction
+Latest confirmed public Kaggle score in this repo: `0.60007` from the corrected notebook submission
 
 ## Repository contents
 
@@ -80,7 +80,7 @@ The notebook auto-detects the execution environment:
 - Best Phase 1 validation model: `embedding` at `K=1000`
 - Best Phase 2 validation model: `embedding + text_only classifier` at `K=1000`
 - Best Phase 2 validation combined score: `0.57342`
-- Previous public Kaggle score: `0.60185` before the query-split correction
+- Latest public Kaggle score: `0.60007` from the corrected notebook submission
 
 ## Notes
 

@@ -171,7 +171,7 @@ Submission export:
 
 - export depth: `7500`
 - output file: `solutions_SeaFour.csv`
-- previous public Kaggle score: `0.60185` before the query-split correction
+- latest public Kaggle score: `0.60007` from the corrected notebook submission
 
 ## Reproducibility notes
 

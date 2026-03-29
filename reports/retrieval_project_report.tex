@@ -104,7 +104,7 @@ This final version is written to match the completed notebook \texttt{kaggle-sub
 Main notebook & \texttt{kaggle-submission.ipynb} \\
 Main output & \texttt{solutions\_SeaFour.csv} \\
 Dataset source & Kaggle competition files provided for the course \\
-Previous public Kaggle score & \textbf{0.60185} (before the query-split correction) \\
+Latest confirmed public Kaggle score & \textbf{0.60007} (corrected notebook submission) \\
 Date & \today \\
 \end{tabular}
 
@@ -549,7 +549,7 @@ Phase 1 baseline & TF-IDF retrieval & MRR@1000 = 0.21852 & Established a simple 
 Phase 1 improved baseline & BM25+ retrieval & MRR@1000 = 0.29833 & Confirmed that stronger lexical weighting helps but is still not enough. \\
 Phase 1 breakthrough & Embedding retrieval & MRR@1000 = 0.50574 & Showed that semantic retrieval is the central improvement for this dataset. \\
 Phase 2 final validation system & Embeddings + text-only classifier + soft bonus & Combined = 0.57342 & Became the selected model because it is strong, simple, and easy to justify. \\
-Previous public submission & Earlier \texttt{solutions\_SeaFour.csv} submission & Kaggle = \textbf{0.60185} & Remains a useful public reference, but it predates the corrected query-split protocol. \\
+Corrected notebook public submission & Regenerated \texttt{solutions\_SeaFour.csv} submission & Kaggle = \textbf{0.60007} & Confirms that the corrected protocol remains competitive on the public leaderboard. \\
 \bottomrule
 \end{tabularx}
 \caption{Project evolution from the first baseline to the final public leaderboard result.}
@@ -576,10 +576,10 @@ Because the corrected protocol reserves \texttt{queries\_test.json} as the only 
 Split / Score & Recall@K & Precision@K & MRR@K & Accuracy & Combined / Public Score \\
 \midrule
 Validation-selected system (\(K=1000\)) & 0.85902 & 0.00827 & 0.50720 & 0.91919 & 0.57342 \\
-Previous Kaggle public leaderboard & --- & --- & --- & --- & \textbf{0.60185} \\
+Latest Kaggle public leaderboard (corrected notebook submission) & --- & --- & --- & --- & \textbf{0.60007} \\
 \bottomrule
 \end{tabularx}
-\caption{Current validation-selected system and the previous public Kaggle reference score.}
+\caption{Current validation-selected system and the latest confirmed public Kaggle score.}
 \label{tab:finalscores}
 \end{table}
 
@@ -677,6 +677,6 @@ The final notebook and this report align with the full brief:
     \item they preserve a reproducible path to Kaggle submission.
 \end{itemize}
 
-Empirically, the strongest active pipeline in the final notebook is the embedding retriever combined with the brief-aligned text-only classifier and a soft category bonus. Under the corrected protocol, this configuration achieved a best Phase 2 validation combined score of \textbf{0.57342}. A previous public Kaggle submission from before the query-split correction scored \textbf{0.60185}, but the regenerated CSV from the corrected notebook should be resubmitted separately to obtain a fresh public score. These results still support the main conclusion of the project: semantic retrieval is essential for this corpus, and a lightweight category-aware reranking step can improve the final system without making the pipeline unnecessarily complex.
+Empirically, the strongest active pipeline in the final notebook is the embedding retriever combined with the brief-aligned text-only classifier and a soft category bonus. Under the corrected protocol, this configuration achieved a best Phase 2 validation combined score of \textbf{0.57342}, and the regenerated Kaggle submission obtained a confirmed public score of \textbf{0.60007}. These results still support the main conclusion of the project: semantic retrieval is essential for this corpus, and a lightweight category-aware reranking step can improve the final system without making the pipeline unnecessarily complex.
 
 \end{document}
