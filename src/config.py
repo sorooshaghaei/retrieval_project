@@ -46,8 +46,8 @@ class CrossEncoderConfig:
     negatives_per_positive: int = 4
     hard_negative_top_k: int = 200
     train_query_limit: int = 327
-    rerank_top_m: int = 30
-    zscore_weight: float = 0.75
+    rerank_top_m: int = 45
+    zscore_weight: float = 1.0
     category_bonus: float = 0.5
     fp16: bool = True
     random_seed: int = 42
@@ -58,8 +58,8 @@ class CrossEncoderConfig:
 class RetrievalPipelineConfig:
     final_model: ModelName = "embedding"
     evaluation_models: tuple[ModelName, ...] = ("embedding",)
-    evaluation_top_ks: tuple[int, ...] = (7_500,)
-    submit_top_k: int = 7_500
+    evaluation_top_ks: tuple[int, ...] = (12_500,)
+    submit_top_k: int = 12_500
     enable_category_prediction: bool = True
     enable_category_filter: bool = True
     enable_cross_encoder_rerank: bool = True
