@@ -1,0 +1,5 @@
+"""Retrieval project package."""
+
+from .config import DEFAULT_CONFIG
+
+__all__ = ["DEFAULT_CONFIG"]
