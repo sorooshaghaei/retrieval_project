@@ -11,50 +11,76 @@
 
 ## Overview
 
-This repository now centers on a reusable Python pipeline in [`src/pipeline.py`](src/pipeline.py), not just a single notebook workflow.
+This repository contains the current retrieval pipeline, evaluation notebooks, submission notebooks, and the final LaTeX report for the course Kaggle retrieval project.
 
 The implemented system supports:
 
 - first-stage retrieval with `tfidf`, `bm25`, or `embedding`
 - category prediction with a TF-IDF + `LinearSVC` classifier
-- optional category-filtered retrieval
-- optional cross-encoder reranking
-- leaderboard-style evaluation with Recall, Precision, MRR, and category Accuracy
-- Kaggle submission writing based on the sample submission format
+- category-aware retrieval logic
+- cross-encoder reranking
+- offline leaderboard-style evaluation with Recall, Precision, MRR, and category Accuracy
+- Kaggle submission writing from the sample submission schema
 
-## Current Default Configuration
+The project is no longer organized around a single notebook only. The reusable pipeline lives in [`src/pipeline.py`](src/pipeline.py), while the notebooks document analysis, evaluation, reranker experiments, and submission generation.
 
-The defaults in [`src/config.py`](src/config.py) are:
+## Current Project State
+
+The current defaults in [`src/config.py`](src/config.py) are:
 
 - `final_model="embedding"`
 - `evaluation_models=("embedding",)`
-- `submit_top_k=7500`
+- `evaluation_top_ks=(12500,)`
+- `submit_top_k=12500`
 - `enable_category_prediction=True`
 - `enable_category_filter=True`
 - `enable_cross_encoder_rerank=True`
 - embedding model: `all-MiniLM-L6-v2`
 - cross-encoder model: `cross-encoder/ms-marco-MiniLM-L6-v2`
+- rerank depth: `45`
+- category bonus: `0.5`
+- classifier query tags enabled: `True`
 
-So the out-of-the-box pipeline is: encode documents and queries with Sentence-Transformers, retrieve top documents by dense similarity, predict categories, and write a Kaggle submission. Category-filtered retrieval and cross-encoder reranking exist in the codebase but are disabled by default.
+So the current pipeline direction is:
+
+1. build normalized document and query text
+2. retrieve candidates with embeddings by default
+3. predict query categories
+4. apply category-aware retrieval logic
+5. rerank the head of the candidate list with a cross-encoder
+6. export `solutions_SeaFour.csv`
+
+Important project note: the repository distinguishes between saved offline evaluation outputs, current code defaults, and external Kaggle leaderboard results. The report in [`reports/retrieval_project_report.tex`](reports/retrieval_project_report.tex) documents those differences explicitly.
 
 ## Repository Structure
 
 ```text
 retrieval_project/
-├── data/                       # competition files (not committed)
-├── cache/                      # cached indices, embeddings, classifiers, rerankers
-├── notebooks/                  # experiments and submission notebooks
-├── report/                     # LaTeX report and compiled PDF
+├── data/                                  # competition files (not committed)
+├── cache/                                 # cached indices, embeddings, classifiers, rerankers
+├── notebooks/
+│   ├── data-analysis.ipynb                # dataset exploration
+│   ├── retrieval-evaluation.ipynb         # offline retrieval / Stage 2 evaluation
+│   ├── reranker-evaluation.ipynb          # reranker-focused experiments
+│   ├── kaggle-submission.ipynb            # main submission notebook
+│   └── kaggle-submission-standalone.ipynb # standalone submission variant
+├── reports/
+│   ├── retrieval_project_report.tex       # canonical LaTeX report source
+│   ├── retrieval_project_report.pdf       # compiled report
+│   └── figures/embedding_projection.png   # report figure asset
 ├── src/
-│   ├── pipeline.py             # main orchestration helpers
-│   ├── config.py               # dataclass-based configuration
-│   ├── data/                   # loading and text normalization
-│   ├── retrieval/              # TF-IDF, BM25, embedding retrieval
-│   ├── categorization/         # category classifier
-│   ├── cross_encoder/          # reranker training and inference helpers
-│   ├── evaluation/             # retrieval and leaderboard metrics
-│   └── output/                 # Kaggle submission writing
-├── PIPELINE.md                 # step-by-step pipeline description
+│   ├── pipeline.py                        # orchestration helpers
+│   ├── config.py                          # dataclass-based configuration
+│   ├── data/                              # loading and text normalization
+│   ├── retrieval/                         # TF-IDF, BM25, embedding retrieval
+│   ├── categorization/                    # category classifier
+│   ├── cross_encoder/                     # cross-encoder training / inference
+│   ├── reranking/                         # reranking logic
+│   ├── evaluation/                        # retrieval and leaderboard metrics
+│   ├── output/                            # diagnostics and submission writing
+│   ├── infra/                             # runtime and notebook helpers
+│   └── cache/                             # cache store helpers
+├── PIPELINE.md
 ├── README.md
 └── requirements.txt
 ```
@@ -69,55 +95,71 @@ Place these files in `data/`:
 - `qgts_train.json`
 - `submission.csv`
 
-Required columns enforced by the code:
+Required columns enforced by the pipeline:
 
 - documents: `id`, `title`, `text`, `tags`, `category`
 - train queries: `id`, `title`, `text`, `tags`, `category`
 - test queries: `id`, `title`, `text`, `tags`
 - sample submission: `query_id`, `relevant_doc_ids`, `category`
 
+The qrels file is expected to provide `relevant_doc_ids` entries compatible with the loader used in the notebooks and report.
+
 ## Installation
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## How The Code Is Intended To Run
+On Windows PowerShell, activate with:
 
-The pipeline is designed to be imported from notebooks or Python scripts.
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
-Main stages exposed in [`src/pipeline.py`](src/pipeline.py):
+## Main Pipeline API
 
-1. `bootstrap()` resolves runtime paths and creates `cache/`
-2. `load_project_frames()` loads JSON/CSV inputs and builds normalized `content`
-3. `prepare_retrievers()` builds or loads retrieval artifacts
-4. `predict_categories()` trains or loads the category classifier and predicts query categories
-5. `build_cross_encoder_reranker()` optionally trains or loads the cross-encoder
-6. `run_first_stage_retrieval()` runs dense or lexical retrieval
-7. `rerank_retrieval_results()` optionally reranks retrieved documents
-8. `write_submission()` writes the final Kaggle CSV
+The main orchestration helpers are defined in [`src/pipeline.py`](src/pipeline.py):
+
+1. `bootstrap()` resolves runtime paths and creates the cache directory
+2. `load_project_frames()` loads raw inputs and builds normalized working frames
+3. `prepare_retrievers()` prepares the configured retrieval backends
+4. `predict_categories()` trains or loads the classifier and predicts query categories
+5. `build_cross_encoder_reranker()` trains or loads the reranker when enabled
+6. `run_first_stage_retrieval()` runs retrieval for train or test queries
+7. `rerank_retrieval_results()` reranks the retrieved head when enabled
+8. `write_submission()` writes the Kaggle-formatted CSV
 
 ## Text Preparation
 
-Text normalization in [`src/data/text.py`](src/data/text.py):
+Normalization is implemented in [`src/data/text.py`](src/data/text.py).
 
-- concatenates configured fields into a single `content` column
-- lowercases text
-- replaces `-`, `_`, and `/` with spaces
-- collapses repeated whitespace
-- converts lists such as `tags` into space-joined text
+The project builds a normalized `content` field by:
 
-By default:
+- lowercasing text
+- replacing `-`, `_`, and `/` with spaces
+- collapsing repeated whitespace
+- trimming leading and trailing whitespace
+- converting list fields such as `tags` into space-joined text
 
-- document retrieval text uses `title + text + tags`
-- retrieval query text uses `title + text`
-- category-classifier query text uses `title + text + tags`
+Configured source columns:
 
-## Evaluation
+- document retrieval text: `title + text + tags`
+- retrieval query text: `title + text`
+- classifier query text: `title + text + tags`
 
-Implemented in [`src/evaluation/metrics.py`](src/evaluation/metrics.py):
+## Evaluation and Submission Workflow
+
+The notebooks currently play different roles:
+
+- [`notebooks/data-analysis.ipynb`](notebooks/data-analysis.ipynb): dataset inspection and exploratory analysis
+- [`notebooks/retrieval-evaluation.ipynb`](notebooks/retrieval-evaluation.ipynb): offline evaluation of retrieval and Stage 2 variants
+- [`notebooks/reranker-evaluation.ipynb`](notebooks/reranker-evaluation.ipynb): reranker-specific experiments
+- [`notebooks/kaggle-submission.ipynb`](notebooks/kaggle-submission.ipynb): main submission workflow
+- [`notebooks/kaggle-submission-standalone.ipynb`](notebooks/kaggle-submission-standalone.ipynb): standalone submission version
+
+Offline metrics are computed in [`src/evaluation/metrics.py`](src/evaluation/metrics.py):
 
 - `Recall@k`
 - `Precision@k`
@@ -131,16 +173,18 @@ Implemented in [`src/evaluation/metrics.py`](src/evaluation/metrics.py):
 
 - local execution
 - Kaggle
-- Google Colab with Drive mounted
+- Google Colab
 
-It resolves `data/`, `cache/`, and the output CSV automatically.
+It resolves `data/`, `cache/`, and the output CSV path automatically.
 
-## Output
+## Outputs
 
-The default output file is `solutions_SeaFour.csv` in the project root.  
-Cached artifacts are stored under `cache/`.
+- default submission file: `solutions_SeaFour.csv`
+- cached artifacts: `cache/`
+- canonical report source: [`reports/retrieval_project_report.tex`](reports/retrieval_project_report.tex)
+- compiled report: [`reports/retrieval_project_report.pdf`](reports/retrieval_project_report.pdf)
 
-## Report
+## Additional Documentation
 
-- source: [`report/retrieval_project_report.tex`](report/retrieval_project_report.tex)
-- pdf: [`report/retrieval_project_report.pdf`](report/retrieval_project_report.pdf)
+- [`PIPELINE.md`](PIPELINE.md): step-by-step pipeline description
+- [`reports/retrieval_project_report.tex`](reports/retrieval_project_report.tex): final written report
