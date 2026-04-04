@@ -14,7 +14,7 @@ from .infra.runtime import resolve_runtime_paths
 from .output.submission import write_kaggle_submission
 from .reranking import rerank_results_with_cross_encoder
 from .retrieval import prepare_retriever, run_category_filtered_retrieval, run_retrieval
-from .types import GroundTruthEntry, RetrievalResult, RuntimePaths
+from .types import GroundTruthEntry, ModelName, RetrievalResult, RuntimePaths
 
 
 @dataclass
@@ -168,11 +168,13 @@ def run_first_stage_retrieval(
     category_artifacts: CategoryArtifacts,
     split: Literal["train", "test"] = "test",
     top_k: int | None = None,
+    model_name_override: ModelName | None = None,
     config: AllConfig = DEFAULT_CONFIG,
 ) -> tuple[list[RetrievalResult], dict[str, str] | None]:
     query_frame = frames.train_queries if split == "train" else frames.test_queries
     embedding_kind = "queries_train" if split == "train" else "queries_test"
     retrieval_top_k = config.retrieval_pipeline.submit_top_k if top_k is None else top_k
+    selected_model = model_name_override or config.retrieval_pipeline.final_model
     category_predictions = (
         category_artifacts.train_query_category_map
         if split == "train"
@@ -186,17 +188,21 @@ def run_first_stage_retrieval(
             classifier_artifacts=category_artifacts.classifier_artifacts,
             top_k=retrieval_top_k,
             cache_dir=paths.cache_dir,
+            model_name=selected_model,
+            prepared_artifacts=prepared_retrievers.get(selected_model),
+            query_category_map=category_predictions,
+            embedding_kind_prefix=embedding_kind,
             config=config,
         )
         return results, category_predictions
 
     results = run_retrieval(
-        model_name=config.retrieval_pipeline.final_model,
+        model_name=selected_model,
         docs_frame=frames.docs,
         queries_frame=query_frame,
         top_k=retrieval_top_k,
         cache_dir=paths.cache_dir,
-        prepared_artifacts=prepared_retrievers[config.retrieval_pipeline.final_model],
+        prepared_artifacts=prepared_retrievers[selected_model],
         embedding_kind=embedding_kind,
         config=config,
     )

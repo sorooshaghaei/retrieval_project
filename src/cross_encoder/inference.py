@@ -13,6 +13,20 @@ from ..types import GroundTruthEntry
 from .training import build_cross_encoder_training_examples, build_text_map, mine_hard_negative_doc_ids
 
 
+def _synchronize_cross_encoder_max_length(cross_encoder: Any, max_length: int) -> Any:
+    cross_encoder.max_length = int(max_length)
+    tokenizer = getattr(cross_encoder, "tokenizer", None)
+    if tokenizer is not None:
+        tokenizer.model_max_length = int(max_length)
+        if hasattr(tokenizer, "init_kwargs"):
+            tokenizer.init_kwargs["model_max_length"] = int(max_length)
+    tokenizer_kwargs = getattr(cross_encoder, "tokenizer_kwargs", None)
+    if isinstance(tokenizer_kwargs, dict):
+        tokenizer_kwargs["model_max_length"] = int(max_length)
+        tokenizer_kwargs["max_length"] = int(max_length)
+    return cross_encoder
+
+
 def build_or_load_cross_encoder(
     train_queries_frame: pd.DataFrame,
     docs_frame: pd.DataFrame,
@@ -66,7 +80,10 @@ def build_or_load_cross_encoder(
     if config.cross_encoder.enable_cache and cache_marker.exists():
         print(f"Loading cross-encoder from cache: {model_dir.name}")
         try:
-            cached_model = CrossEncoder(str(model_dir), max_length=config.cross_encoder.max_length)
+            cached_model = _synchronize_cross_encoder_max_length(
+                CrossEncoder(str(model_dir), max_length=config.cross_encoder.max_length),
+                config.cross_encoder.max_length,
+            )
             if config.cross_encoder.fp16 and torch.cuda.is_available():
                 cached_model.model.half()
             OBJECT_MEMORY_CACHE[memory_key] = cached_model
@@ -101,7 +118,10 @@ def build_or_load_cross_encoder(
     if not training_examples:
         raise ValueError("Cross-encoder training set is empty after preprocessing.")
     print(f"Training cross-encoder on {len(training_examples):,} pairs from {len(candidate_query_ids):,} queries")
-    cross_encoder = CrossEncoder(config.cross_encoder.model_name, max_length=config.cross_encoder.max_length)
+    cross_encoder = _synchronize_cross_encoder_max_length(
+        CrossEncoder(config.cross_encoder.model_name, max_length=config.cross_encoder.max_length),
+        config.cross_encoder.max_length,
+    )
     train_loader = DataLoader(training_examples, shuffle=True, batch_size=config.cross_encoder.batch_size)
     warmup_steps = max(1, int(len(train_loader) * config.cross_encoder.epochs * 0.1))
     if config.cross_encoder.enable_cache:
@@ -117,7 +137,10 @@ def build_or_load_cross_encoder(
     if config.cross_encoder.enable_cache:
         print(f"Saved cross-encoder to cache: {model_dir.name}")
         cross_encoder.save(str(model_dir))
-        cached_model = CrossEncoder(str(model_dir), max_length=config.cross_encoder.max_length)
+        cached_model = _synchronize_cross_encoder_max_length(
+            CrossEncoder(str(model_dir), max_length=config.cross_encoder.max_length),
+            config.cross_encoder.max_length,
+        )
         if config.cross_encoder.fp16 and torch.cuda.is_available():
             cached_model.model.half()
         OBJECT_MEMORY_CACHE[memory_key] = cached_model

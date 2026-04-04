@@ -1,4 +1,3 @@
-
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=1.9cm]{geometry}
@@ -71,7 +70,7 @@
 
 {\Large\bfseries Retrieval Engine Competition Project\par}
 \vspace{0.25cm}
-{\large Final Report for Submission\par}
+{\large Project Report\par}
 \vspace{0.7cm}
 
 {\large Group: SeaFour\par}
@@ -95,7 +94,7 @@ Nguyen Ho Bao KHANH \\
   inner sep=11pt
 ]{
 \textbf{Submission scope.}
-This final version reconciles the saved offline evaluation notebook \texttt{retrieval-evaluation.ipynb}, the current submission pipeline in \texttt{kaggle-submission.ipynb}, and the user-reported public Kaggle result. It reports the final dataset exploration, preprocessing choices, the corrected query-split protocol, Phase 1 retrieval comparison, Phase 2 classifier-aware reranking results, document-holdout classification, and the regenerated Kaggle submission file.};
+This final version brings together the saved offline evaluation notebook \texttt{retrieval-evaluation.ipynb}, the submission notebook \texttt{kaggle-submission.ipynb}, and the public Kaggle score. It covers dataset exploration, preprocessing, embedding inspection, a Phase 1 comparison on all 327 labeled queries, document-holdout classification, Phase 2 retrieval improvements for all three first-stage models, and the regenerated \texttt{solutions\_SeaFour.csv} file.};
 \end{tikzpicture}
 
 \vspace{0.9cm}
@@ -103,8 +102,7 @@ This final version reconciles the saved offline evaluation notebook \texttt{retr
 \begin{tabular}{>{\bfseries}p{0.28\linewidth}p{0.60\linewidth}}
 Main notebook & \texttt{kaggle-submission.ipynb} \\
 Main output & \texttt{solutions\_SeaFour.csv} \\
-Dataset source & Kaggle competition files provided for the course \\
-Public Kaggle score referenced in this report & \textbf{0.62337} (user-reported public leaderboard result) \\
+Public Kaggle score & \textbf{0.62419} \\
 Date & \today \\
 \end{tabular}
 
@@ -117,7 +115,7 @@ Date & \today \\
 
 Information retrieval is the task of ranking documents so that the most relevant ones appear first for a user query. In this project we work with a large technical corpus and a set of labeled training queries. The assignment is divided into two phases. Phase 1 focuses on basic retrieval with classical and neural methods. Phase 2 adds category classification and asks how the classifier can be used to improve retrieval.
 
-The final notebook is structured around the required project questions rather than around only a single optimized run. It therefore contains:
+This report follows the questions in the project brief instead of describing only one tuned run. It includes:
 \begin{itemize}
     \item dataset loading and statistical exploration;
     \item construction of a normalized \texttt{content} field;
@@ -131,7 +129,7 @@ The final notebook is structured around the required project questions rather th
 
 \section{Project Roadmap}
 
-This report is meant to document not only the final score, but also the path that led to it. The project started with basic lexical retrieval, then moved toward semantic retrieval, then added category prediction as a second signal, and finally became a submission-ready pipeline after several debugging and reproducibility fixes.
+This report is not only about the final score, but also about how the system improved over time. We started with lexical retrieval, moved to semantic retrieval, added category prediction as an extra signal, and then turned everything into a submission-ready pipeline after a few important debugging and reproducibility fixes.
 
 \begin{figure}[H]
 \centering
@@ -150,7 +148,7 @@ This report is meant to document not only the final score, but also the path tha
 \node[road, fill=softgreen, below=0.45cm of r2] (r3) {\textbf{3. Move to semantic retrieval.} Sentence-Transformer embeddings were added to reduce vocabulary mismatch between short queries and long technical documents.};
 \node[road, fill=softblue, below=0.45cm of r3] (r4) {\textbf{4. Add Phase 2 classification.} A TF-IDF + LinearSVC classifier was trained for categories, then used to rerank candidates with a soft category bonus instead of a hard filter.};
 \node[road, fill=softgold, below=0.45cm of r4] (r5) {\textbf{5. Debug the pipeline.} Two important corrections changed the project quality: schema-aware qrels parsing fixed false zero metrics, and stable grouped sampling fixed category-related notebook errors.};
-\node[road, fill=softgreen, below=0.45cm of r5] (r6) {\textbf{6. Finalize the submission.} The final report separates the strongest offline Stage 2 run from the latest Kaggle submission run and explains why those settings differ without overemphasizing every tuned value.};
+\node[road, fill=softgreen, below=0.45cm of r5] (r6) {\textbf{6. Finalize the submission.} The report separates the strongest offline Stage 2 run from the latest Kaggle submission run and explains why those settings differ without overemphasizing every tuned value.};
 
 \draw[accent, thick, -{Latex[length=3mm]}] (r1.south) -- (r2.north);
 \draw[accent, thick, -{Latex[length=3mm]}] (r2.south) -- (r3.north);
@@ -174,7 +172,7 @@ Lexical baselines & How far can exact-term retrieval go? & TF-IDF and BM25+ gave
 Dense retrieval & Can semantic matching improve recall and rank quality? & Embeddings became the strongest retriever by a large margin on Recall and MRR. \\
 Classification & Can category prediction help retrieval? & Yes, but as a soft reranking signal rather than as a strict filter. \\
 Debugging & Why did some notebook outputs look suspicious or fail? & Fixing qrels parsing and grouped sampling removed false zeros and notebook instability. \\
-Submission & Which pipeline is strong and defensible enough to submit? & Embeddings remained the backbone, while later runs combined a tag-aware query classifier, a soft category bonus, and cross-encoder reranking; the exact values differ between the saved evaluation run and the current code defaults. \\
+Submission & Which pipeline felt solid enough to submit? & Embeddings stayed at the core, while later runs added a tag-aware query classifier, a soft category bonus, and cross-encoder reranking. The exact settings differ between the saved evaluation run and the current code defaults. \\
 \bottomrule
 \end{tabularx}
 \caption{Milestones that structured the project from start to final submission.}
@@ -183,40 +181,38 @@ Submission & Which pipeline is strong and defensible enough to submit? & Embeddi
 
 \section{Final Changes and Reasons}
 
-The final submission differs from earlier draft states of the project in five important ways.
+The final version differs from our earlier drafts in five main ways.
 
 \begin{enumerate}
-    \item \textbf{Ground-truth parsing was aligned with the real qrels schema.} The competition qrels store relevant items under \texttt{relevant\_doc\_ids} with nested \texttt{doc\_id} entries. Aligning the loader with that format was necessary so that Recall, Precision, and MRR reflect the true labels instead of empty relevance sets. The final notebook now also raises an explicit error if qrels parsing yields empty relevance, missing labeled-query coverage, or document ids that are absent from the corpus.
-    \item \textbf{Category-wise sampling was made stable for current pandas behavior.} The notebook now uses a sampling pattern that preserves the \texttt{category} column reliably during visualization and downsampling steps. This prevents category-aware plots and classifier preparation from failing because of grouped-sampling side effects.
-    \item \textbf{The query-side reporting was aligned with the actual run contexts.} Only the training queries have visible qrels, while the Kaggle test queries remain unlabeled. The report therefore separates offline Stage 2 analysis on labeled queries from the later submission direction.
-    \item \textbf{The report now prioritizes impact over hyperparameter history.} Earlier draft text emphasized one supposedly ``current'' Stage 2 configuration. The revised section below instead explains which behaviors were robust across the later experiments: strong embedding recall, useful reranking, harmful hard filtering, and mild gains from a soft category bonus.
-    \item \textbf{The final reporting now distinguishes three sources of truth.} The best offline Stage 2 result comes from \texttt{retrieval-evaluation.ipynb}; the current submission-code defaults come from \texttt{src/config.py} and \texttt{kaggle-submission.ipynb}; and the public score \(0.62337\) is treated as an external leaderboard result reported by the team.
+    \item \textbf{Ground-truth parsing now matches the real qrels schema.} The competition qrels store relevant items under \texttt{relevant\_doc\_ids} with nested \texttt{doc\_id} entries. Without this fix, Recall, Precision, and MRR could be computed against empty relevance sets. The notebook now also raises an error if qrels parsing produces empty relevance, misses labeled queries, or references document ids that are not in the corpus.
+    \item \textbf{Category-wise sampling is now stable with the current pandas behavior.} The notebook uses a sampling pattern that keeps the \texttt{category} column during visualization and downsampling. This avoids the grouped-sampling issue that was breaking category-aware plots and classifier preparation.
+    \item \textbf{The report now separates labeled-query evaluation from Kaggle submission runs.} Only the training queries have visible qrels, while the Kaggle test queries are unlabeled. Because of that, the report keeps offline Stage 2 analysis separate from the later submission run.
+    \item \textbf{The discussion now focuses more on the main behaviors than on the full hyperparameter history.} Earlier drafts put too much emphasis on one supposedly ``current'' Stage 2 configuration. The revised version focuses instead on the patterns that stayed consistent across later experiments: strong embedding recall, useful reranking, harmful hard filtering, and small gains from a soft category bonus.
+    \item \textbf{The final report keeps three pieces of evidence separate.} The best offline Stage 2 result comes from \texttt{retrieval-evaluation.ipynb}; the current submission setup comes from \texttt{src/config.py} together with \texttt{kaggle-submission.ipynb}; and the public score \(0.62419\) comes from the leaderboard.
 \end{enumerate}
 
 \subsection{Previous tries, failures, and lessons}
 
-\begin{table}[H]
-\centering
-\small
-\begin{tabularx}{\linewidth}{p{0.11\linewidth}p{0.24\linewidth}Y Y}
-\toprule
-Type & Attempt or issue & What happened & Decision or lesson \\
-\midrule
-Attempt & TF-IDF baseline & The model was simple and useful as a baseline, but lexical overlap alone was not enough for many relevant pairs. & Keep it as a baseline, not as the final retriever. \\
-Attempt & BM25+ lexical upgrade & BM25+ improved over TF-IDF and handled length variation better, but it still lagged far behind embeddings on recall and rank quality. & Use it as the strongest lexical reference point. \\
-Failure & Qrels parsing mismatch & The notebook read the wrong relevance field, which produced empty relevance sets and misleading zero Recall, Precision, and MRR values. & Parse \texttt{relevant\_doc\_ids} correctly, verify average relevant documents per query, and fail early if the parsed qrels no longer match the labeled queries or corpus ids. \\
-Failure & Grouped sampling instability & A grouped pandas sampling pattern sometimes dropped the \texttt{category} column and caused notebook errors such as \texttt{KeyError: category}. & Switch to stable category-preserving downsampling for visualization and classifier preparation. \\
-Attempt & Query classifier with \texttt{text + tags} & The classifier became extremely accurate because the query tags are category-pure in the labeled split, so they act as label-revealing metadata in practice. & Keep the caveat explicit and discuss its \emph{impact} on retrieval decisions rather than treating the raw classifier setup as the main result. \\
-Decision & Evaluation depth vs.\ submission depth & Later notebooks and current code defaults do not preserve one frozen value for every run context. The offline evaluation, current submission defaults, and public Kaggle result therefore need to be reported separately. & Focus the report on what the different depths changed in practice: candidate coverage, reranking reach, runtime, and how to interpret the scores. \\
-\bottomrule
-\end{tabularx}
-\caption{Main previous tries, failures, and lessons learned during the project.}
-\label{tab:triesfailures}
-\end{table}
+\paragraph{Baseline retrieval attempts.}
+\begin{itemize}
+    \item \textbf{TF-IDF baseline.} The model was simple and useful as a first sanity check, but lexical overlap alone was not enough for many relevant query-document pairs. In the end, TF-IDF stayed useful as a baseline, not as our final retriever.
+    \item \textbf{BM25+ lexical upgrade.} BM25+ improved over TF-IDF and handled document-length variation better, but it still stayed clearly behind embeddings on recall and rank quality. We kept it as our strongest lexical reference point rather than our final Stage 1 model.
+\end{itemize}
+
+\paragraph{Notebook and pipeline failures.}
+\begin{itemize}
+    \item \textbf{Grouped sampling instability.} A grouped pandas sampling pattern sometimes dropped the \texttt{category} column and triggered notebook errors such as \texttt{KeyError: category}. The fix was to switch to stable category-preserving downsampling for visualization and classifier preparation.
+\end{itemize}
+
+\paragraph{Lessons that shaped the final report.}
+\begin{itemize}
+    \item \textbf{Query classifier with \texttt{text + tags}.} The classifier became extremely accurate because the query tags are almost category-pure in the labeled split, so they behave a lot like label-revealing metadata. For that reason, we keep this caveat visible and discuss the classifier mainly through its effect on retrieval decisions rather than presenting the raw setup as a headline result.
+    \item \textbf{Evaluation depth vs.\ submission depth.} Later notebooks and the current code defaults do not all use exactly the same depth values. So the offline evaluation, the current submission defaults, and the public Kaggle result need to be reported separately. What matters most in practice is how depth changes coverage, reranking reach, runtime, and score interpretation.
+\end{itemize}
 
 \section{Dataset Description and Exploratory Analysis}
 
-The dataset contains documents, training queries, test queries, and relevance judgments. From the final project files, the corpus contains \textbf{216,041 documents}, \textbf{327 labeled training queries}, and \textbf{141 Kaggle test queries}. The documents belong to \textbf{five categories}. Because only the training queries have visible qrels, the saved offline evaluation uses those 327 labeled queries for Stage 2 diagnostics and keeps the Kaggle test file untouched for final export. Tables~\ref{tab:datasetoverview}--\ref{tab:doccats} summarize the global scale of the collection, the report's use of the query files, and the category distribution.
+In \texttt{data-analysis.ipynb}, we found \textbf{216,041 documents}, \textbf{327 labeled training queries}, \textbf{141 Kaggle test queries}, and \textbf{2,970 relevance judgments}. The documents belong to \textbf{five categories}. Since only \texttt{queries\_train.json} has visible qrels, we use all 327 labeled queries for offline evaluation, while the 141 Kaggle test queries are kept for the final submission export. Tables~\ref{tab:datasetoverview}--\ref{tab:doccats} summarize the dataset size, the role of each query file, and the category distribution.
 
 \begin{table}[H]
 \centering
@@ -228,11 +224,12 @@ Dataset element & Count or value \\
 Documents & 216,041 \\
 Labeled training queries & 327 \\
 Kaggle test queries & 141 \\
+Relevance judgments & 2,970 \\
 Categories & 5 \\
 Average relevant documents per training query & 9.08 \\
-Average document length & 900.92 characters / 94.86 tokens \\
-Average training query length & 48.44 characters / 4.95 tokens \\
-Average test query length & 48.88 characters / 4.96 tokens \\
+Average document length & 900.92 characters / 155.81 tokens \\
+Average training query length & 48.44 characters / 8.55 tokens \\
+Average test query length & 48.88 characters / 8.50 tokens \\
 \bottomrule
 \end{tabularx}
 \caption{Global dataset overview.}
@@ -272,22 +269,39 @@ Category & Document count & Training-query count \\
 \label{tab:doccats}
 \end{table}
 
+Figure~\ref{fig:dataset-distribution} gives a more visual view of the same category distribution. It shows that \texttt{tex} is the largest category in the corpus, while \texttt{android} is the smallest. The categories are not perfectly balanced, but every class is still large enough to support both retrieval and classification experiments.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\linewidth]{figures/dataset-distribution.png}
+\caption{Document distribution by category produced by \texttt{data-analysis.ipynb}.}
+\label{fig:dataset-distribution}
+\end{figure}
+
 These exploratory results matter because they help explain later retrieval behavior. In particular, the corpus contains long documents while the queries are much shorter. This asymmetry generally makes strict lexical overlap less reliable, especially when the query paraphrases the document instead of reusing its exact surface vocabulary.
 
 \subsection{Available fields}
 
-Each document contains an \texttt{id} and can include \texttt{title}, \texttt{text}, \texttt{tags}, and \texttt{category}. Training queries also contain \texttt{id}, \texttt{title}, \texttt{text}, \texttt{tags}, and \texttt{category}. Test queries omit the category label because that is one of the targets of Phase 2 inference. The qrels file maps each labeled training query to a set of relevant document ids, and the final loader validates that this mapping is non-empty, aligned with \texttt{queries\_train.json}, and consistent with the document corpus.
+The notebook lists the following fields:
+\begin{itemize}
+    \item documents: \texttt{id}, \texttt{title}, \texttt{text}, \texttt{tags}, \texttt{category};
+    \item training queries: \texttt{id}, \texttt{title}, \texttt{text}, \texttt{tags}, \texttt{category};
+    \item test queries: \texttt{id}, \texttt{title}, \texttt{text}, \texttt{tags};
+    \item qrels: \texttt{category}, \texttt{relevant\_doc\_ids}, \texttt{total\_relevant\_docs}, with nested \texttt{doc\_id} and \texttt{relevance}.
+\end{itemize}
+
+The qrels loader validates that every labeled query has at least one relevant document and that the referenced document ids exist in the corpus.
 
 \section{Preprocessing and Content Construction}
 
-The assignment asks for a new text field called \texttt{content}. The final notebook uses the following policy:
+The assignment asks for a new text field called \texttt{content}. The notebook uses the following policy:
 \begin{itemize}
     \item documents: \texttt{title + text + tags};
     \item retrieval queries: \texttt{title + text};
     \item classifier queries in the active notebook: \texttt{title + text + tags}.
 \end{itemize}
 
-This means the project uses different query views for retrieval and for Stage 2 classification. Retrieval stays tied to the actual query wording through \texttt{title + text}, while the category classifier also consumes \texttt{tags}. That choice improved the practical submission pipeline, but it must be interpreted carefully because the query tags are highly category-informative in the labeled data.
+So the project uses different query views for retrieval and for Stage 2 classification. Retrieval stays close to the original query wording through \texttt{title + text}, while the category classifier also uses \texttt{tags}. This helped the practical submission pipeline, but it has to be interpreted carefully because the query tags are highly informative about category in the labeled data.
 
 The shared normalization steps are:
 \begin{itemize}
@@ -326,18 +340,24 @@ Embeddings can help retrieval because they are more robust to synonyms, paraphra
 
 \section{Embedding Inspection and Visualization}
 
-After generating embeddings, the notebook prints the matrix shapes for documents and queries. This directly answers the specification that the embedding structures should be examined.
+The notebook prints the exact embedding matrix shapes:
+\begin{itemize}
+    \item document embeddings: \((216{,}041, 384)\);
+    \item labeled-train-query embeddings: \((327, 384)\).
+\end{itemize}
 
-To make the geometry more interpretable, the notebook also builds a 2D projection using \textbf{UMAP} when available and otherwise falls back to \textbf{t-SNE}. The plot uses a category-aware sample of documents together with the training queries. In typical runs, one should observe partial clustering by category. This is expected because categories such as \texttt{android}, \texttt{gaming}, \texttt{tex}, \texttt{unix}, and \texttt{programmers} tend to contain domain-specific vocabulary and recurrent semantic themes.
+This is important because the assignment asks us to inspect the embedding structures directly, not just mention them in words.
+
+To make the geometry more interpretable, the notebook also builds a 2D projection using \textbf{t-SNE} with \texttt{random\_state=42}. The plot uses a category-balanced document sample together with all labeled training queries. The resulting figure shows partial clustering by category, which is expected because \texttt{android}, \texttt{gaming}, \texttt{tex}, \texttt{unix}, and \texttt{programmers} contain distinctive technical vocabulary and recurrent semantic themes.
 
 At the same time, perfect separation should not be expected. The original embeddings live in a much higher-dimensional space, some categories overlap semantically, and short queries are often more ambiguous than documents.
 
-Figure~\ref{fig:embedding-projection} shows the 2D embedding projection produced by the final notebook. The visible grouping confirms that the dense representation captures meaningful category structure, while the overlaps also show that the classes are not trivially separable in two dimensions.
+Figure~\ref{fig:embedding-projection} shows the 2D embedding projection produced by the notebook. The visible grouping confirms that the dense representation captures meaningful category structure, while the overlaps also show that the classes are not trivially separable in two dimensions.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.88\linewidth]{figures/embedding_projection.png}
-\caption{2D projection of sampled document and training-query embeddings produced by the final notebook. UMAP is used when available; otherwise the notebook falls back to t-SNE.}
+\caption{2D t-SNE projection of sampled document embeddings and all labeled training-query embeddings produced by \texttt{data-analysis.ipynb}.}
 \label{fig:embedding-projection}
 \end{figure}
 
@@ -361,15 +381,13 @@ For Phase 1 comparison, the notebook also reports runtime and average latency pe
 
 \section{Phase 1 Experimental Protocol}
 
-Only \texttt{queries\_train.json} has relevance labels, while \texttt{queries\_test.json} is the unlabeled competition test set. For that reason, the corrected notebook does not create a second query-side ``test split'' inside the labeled data. Instead, the labeled training queries are split into:
-\begin{itemize}
-    \item 228 split-train queries (\(\approx 70\%\));
-    \item 99 validation queries (\(\approx 30\%\)).
-\end{itemize}
+Only \texttt{queries\_train.json} has relevance labels, while \texttt{queries\_test.json} is the unlabeled competition test set. So in the final notebook run we use \textbf{all 327 labeled training queries} as the offline evaluation set for retrieval. We do not introduce an additional query-side validation split.
 
-This correction matters for two reasons. First, it keeps the experimental story aligned with the provided files: labeled training queries for development, unlabeled Kaggle test queries for final export. Second, with only 327 labeled queries available, removing an extra internal query test split leaves more supervised data for the classifier.
-
-Phase 1 comparison is run on the \textbf{validation split}. For each model and for several values of \(K\), the notebook stores:
+Phase 1 compares TF-IDF, BM25+, and embeddings over the grid
+\[
+K \in \{10, 100, 1000, 7500, 12500\}.
+\]
+Each model is run once at \(K=12500\), and the smaller-\(K\) metrics are obtained by truncating the stored ranked lists. For each model the notebook stores:
 \begin{itemize}
     \item top-k document ids;
     \item top-k retrieval scores;
@@ -384,31 +402,66 @@ The explicit arrays requested by the assignment are preserved in the notebook as
     \item \texttt{topk\_indices\_embedding}, \texttt{topk\_scores\_embedding}.
 \end{itemize}
 
-\subsection{Phase 1 validation results}
+\noindent In the saved notebook run, all six arrays have shape \((327, 12500)\), which answers that assignment point directly.
 
-The best validation result for each Phase 1 model is shown in Table~\ref{tab:phase1template}. In the saved Phase 1 results, all three models reached their best combined Phase 1 score at \(K=1000\).
+\subsection{Phase 1 results and effect of \texorpdfstring{$K$}{K}}
+
+Table~\ref{tab:phase1full} reports the full Phase 1 comparison extracted from \texttt{retrieval-evaluation.ipynb}.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\begin{tabular}{l r r r r r}
+\toprule
+Model & \(K\) & Recall & Precision & MRR & Combined score \\
+\midrule
+BM25+ & 10 & 0.151892 & 0.092355 & 0.271822 & 0.360668 \\
+BM25+ & 100 & 0.318234 & 0.020795 & 0.281283 & 0.386729 \\
+BM25+ & 1000 & 0.510815 & 0.003734 & 0.281970 & 0.430781 \\
+BM25+ & 7500 & 0.681980 & 0.000702 & 0.282020 & 0.472827 \\
+BM25+ & 12500 & 0.717214 & 0.000449 & 0.282023 & 0.481573 \\
+\midrule
+Embedding & 10 & 0.311335 & 0.183486 & 0.466540 & 0.471992 \\
+Embedding & 100 & 0.581491 & 0.040489 & 0.474049 & 0.505659 \\
+Embedding & 1000 & 0.828389 & 0.006431 & 0.474495 & 0.558980 \\
+Embedding & 7500 & 0.947617 & 0.001099 & 0.474507 & 0.587457 \\
+Embedding & 12500 & 0.965746 & 0.000685 & 0.474507 & 0.591886 \\
+\midrule
+TF-IDF & 10 & 0.140535 & 0.085933 & 0.251524 & 0.351149 \\
+TF-IDF & 100 & 0.324239 & 0.021284 & 0.261963 & 0.383523 \\
+TF-IDF & 1000 & 0.559925 & 0.004089 & 0.262662 & 0.438320 \\
+TF-IDF & 7500 & 0.765464 & 0.000780 & 0.262707 & 0.488889 \\
+TF-IDF & 12500 & 0.790170 & 0.000490 & 0.262707 & 0.494993 \\
+\bottomrule
+\end{tabular}
+\caption{Phase 1 comparison across all models and all evaluated \(K\) values. The combined score is the notebook's average of Recall, Precision, MRR, and classifier accuracy.}
+\label{tab:phase1full}
+\end{table}
+
+The pattern across \(K\) is quite clear in Table~\ref{tab:phase1full}. As \(K\) increases, Recall goes up for all three models because more relevant documents can enter the candidate list. Precision goes down because the list becomes much longer than the number of extra relevant hits. MRR changes only a little after the first few ranks, which means that larger \(K\) mainly improves \emph{coverage}, not the position of the first relevant result.
 
 \begin{table}[H]
 \centering
 \small
 \begin{tabular}{l c c c c c}
 \toprule
-Model & \(K\) & Recall@K & Precision@K & MRR@K & Latency/query \\
+Model & Best \(K\) & Recall@K & Precision@K & MRR@K & Latency/query \\
 \midrule
-TF-IDF & 1000 & 0.53142 & 0.00462 & 0.21852 & 611.82 ms \\
-BM25+ & 1000 & 0.58701 & 0.00513 & 0.29833 & 477.00 ms \\
-Embeddings & 1000 & \textbf{0.85902} & \textbf{0.00827} & \textbf{0.50574} & \textbf{5.88 ms} \\
+TF-IDF & 12500 & 0.790170 & 0.000490 & 0.262707 & 365.34 ms \\
+BM25+ & 12500 & 0.717214 & 0.000449 & 0.282023 & 437.68 ms \\
+Embeddings & 12500 & \textbf{0.965746} & \textbf{0.000685} & \textbf{0.474507} & \textbf{3.68 ms} \\
 \bottomrule
 \end{tabular}
-\caption{Best validation result per Phase 1 model.}
+\caption{Best Phase 1 result per model, including measured latency.}
 \label{tab:phase1template}
 \end{table}
 
-The Phase 1 comparison leads to three main conclusions.
+The Phase 1 results suggest four main points.
 \begin{itemize}
-    \item \textbf{Embeddings were the strongest retrieval model.} They gave the highest Recall@K and MRR@K, which is consistent with the vocabulary-mismatch nature of the task.
-    \item \textbf{BM25+ clearly improved over TF-IDF on lexical retrieval.} This is expected because BM25+ handles document-length variation and repeated term saturation more explicitly.
-    \item \textbf{The embedding implementation was also the fastest in this notebook.} Because document embeddings were cached and query scoring was chunked, dense retrieval was much faster than the current TF-IDF and BM25 loops in local execution.
+    \item \textbf{Embeddings were the strongest retriever at every evaluated \(K\).} They achieved the highest Recall and the highest combined score over the full grid.
+    \item \textbf{TF-IDF ended up with higher recall than BM25+ at large \(K\), while BM25+ kept the better MRR.} In other words, TF-IDF retrieved more relevant material by depth \(12500\), but BM25+ ranked the first relevant result slightly earlier on average.
+    \item \textbf{All three models reached their best combined score at \(K=12500\) in the saved notebook run.} The gain mainly came from higher Recall; MRR was already close to saturated by \(K=1000\).
+    \item \textbf{The embedding implementation was also the fastest.} With cached document embeddings and chunked query scoring, the dense retriever was much faster than the current TF-IDF and BM25+ loops in local execution.
 \end{itemize}
 
 \begin{table}[H]
@@ -418,9 +471,9 @@ The Phase 1 comparison leads to three main conclusions.
 \toprule
 System stage & Recall@K & Precision@K & MRR@K & Interpretation \\
 \midrule
-TF-IDF baseline & 0.53142 & 0.00462 & 0.21852 & A reasonable lexical starting point, but still weak on short-query vocabulary mismatch. \\
-BM25+ lexical model & 0.58701 & 0.00513 & 0.29833 & The best lexical baseline, showing that better term weighting helps but does not close the gap. \\
-Embedding retrieval & \textbf{0.85902} & \textbf{0.00827} & \textbf{0.50574} & The first major jump in performance; semantic matching becomes the key direction for the project. \\
+TF-IDF baseline & 0.790170 & 0.000490 & 0.262707 & Stronger long-list recall than BM25+, but still limited by lexical mismatch and weaker early ranking. \\
+BM25+ lexical model & 0.717214 & 0.000449 & 0.282023 & The stronger lexical ranker near the top of the list, but still clearly behind embeddings on coverage. \\
+Embedding retrieval & \textbf{0.965746} & \textbf{0.000685} & \textbf{0.474507} & The main Phase 1 jump: semantic matching dominates both lexical baselines and sets up a stronger Phase 2 reranking stage. \\
 \bottomrule
 \end{tabularx}
 \caption{How the retrieval project progressed during Phase 1.}
@@ -429,169 +482,178 @@ Embedding retrieval & \textbf{0.85902} & \textbf{0.00827} & \textbf{0.50574} & T
 
 \section{Phase 2: Category Classification}
 
-\subsection{Classifier model}
+\subsection{Classifier model and input features}
 
-The Stage 2 pipeline uses a \textbf{TF-IDF + LinearSVC} classifier. This remains a sensible choice because the task is category prediction rather than document ranking: the classifier only needs to produce one label per query so that retrieval can exploit that label as an extra hint.
-
-TF-IDF is a strong representation for technical categories because category membership is often signaled by highly distinctive lexical cues such as platform names, command-line terms, package names, or domain-specific jargon. LinearSVC is then a practical fit on top of that sparse representation: it is fast, reproducible, and well suited to high-dimensional text data.
-
-What changed across the later experiments is not the classifier family, but the \emph{query representation} and how strongly the classifier is allowed to influence retrieval. In the latest evaluated Stage 2 run, query-side category prediction uses \texttt{title + text + tags}, which makes category prediction stronger but also makes it more important to interpret the classifier as a practical reranking signal rather than as a clean text-only query classifier.
-
-\subsection{Training data choice}
-
-The assignment explicitly asks whether both documents and queries can be used, and whether the classifier works equally well for both. In the implemented pipeline, the classifier is trained on:
+In the notebook, we use a \textbf{TF-IDF + LinearSVC} classifier. This is a reasonable choice for a five-class text classification problem, and it is simple enough to train and evaluate quickly. The input features are:
 \begin{itemize}
-    \item a training split of the document corpus;
-    \item document-side \texttt{content} built from \texttt{title + text + tags}.
+    \item document classifier text: \texttt{title + text + tags};
+    \item query classifier text for diagnostics and submission-time hints: \texttt{title + text + tags}.
 \end{itemize}
 
-On the query side, the classifier is then applied to:
-\begin{itemize}
-    \item all 327 labeled training queries for notebook diagnostics;
-    \item all 141 Kaggle test queries for submission-time category hints.
-\end{itemize}
+For the clean standalone classification benchmark, the notebook trains on an \textbf{80/20 stratified document split} with \texttt{random\_state=42}. Queries are \emph{not} mixed into that training split. They are only used later as a diagnostic transfer test.
 
-This is important methodologically. Query tags are strongly category-informative in the labeled data. That can help the retrieval system, but it also means the classifier should be described as a practical category-hint module rather than as a neutral standalone benchmark.
+\subsection{How accuracy is computed}
 
-\subsection{Classification metrics}
+The notebook computes accuracy as
+\[
+\text{Accuracy} = \frac{\# \text{correct category predictions}}{\# \text{examples in the evaluation set}}.
+\]
+This definition is used both for the held-out document benchmark and for the diagnostic query-side comparison.
 
-The notebook still reports query-side category accuracy, but the meaning of that number is narrower than in the older validation-based writeup. The classifier is trained on documents and then scored on the labeled training queries, so the printed accuracy is a \textbf{diagnostic sanity check} rather than a held-out Stage 2 benchmark. The more important Stage 2 question is therefore not ``what is the clean validation accuracy?'', but rather ``how does the category signal affect ranking quality?''
+\subsection{Document holdout results}
 
-Table~\ref{tab:clfresults} summarizes the classification setup used in the later Stage 2 runs.
+The held-out document benchmark is very strong: the notebook reports \textbf{document-holdout accuracy \(=0.986045\)}. Table~\ref{tab:clfresults} shows the per-category precision, recall, \(F_1\), and per-category accuracy taken from \texttt{retrieval-evaluation.ipynb}.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\begin{tabular}{l r r r r}
+\toprule
+Category & Precision & Recall & \(F_1\) & Accuracy \\
+\midrule
+android & 0.985291 & 0.975652 & 0.980448 & 0.975652 \\
+gaming & 0.993385 & 0.994481 & 0.993933 & 0.994481 \\
+programmers & 0.977089 & 0.974204 & 0.975644 & 0.974204 \\
+tex & 0.994060 & 0.993987 & 0.994023 & 0.993987 \\
+unix & 0.973982 & 0.979635 & 0.976800 & 0.979635 \\
+\bottomrule
+\end{tabular}
+\caption{Held-out document classification results from the stratified 80/20 document split.}
+\label{tab:clfresults}
+\end{table}
+
+Performance is not exactly the same across all categories. In this run, \texttt{gaming} and \texttt{tex} are the easiest classes, while \texttt{android} and \texttt{programmers} are slightly harder. Even so, the weakest category still stays above \(0.97\) per-category accuracy.
+
+\subsection{Document-vs-query comparison}
+
+The assignment also asks whether the classifier works equally well on documents and queries. To answer that, the notebook scores the document-trained classifier on the 327 labeled training queries:
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{l Y Y}
+\begin{tabular}{l r r}
 \toprule
-Component & Stage 2 setup & Why it matters \\
+Evaluation set & Accuracy & Samples \\
 \midrule
-Classifier family & TF-IDF + LinearSVC & Lightweight and strong on sparse technical vocabulary. \\
-Document-side classifier text & \texttt{title + text + tags} & Matches the document metadata available in the corpus. \\
-Query-side classifier text & \texttt{title + text + tags} & Stronger category hints, but less neutral than a text-only query classifier. \\
-Offline query-side evaluation set & All 327 labeled training queries & Useful for diagnostics, but not a held-out estimate. \\
-Submission-time category prediction set & All 141 Kaggle test queries & Supplies the category hints used in the final CSV. \\
+Document holdout & 0.986045 & 43,209 \\
+Labeled train queries (diagnostic) & 0.932722 & 327 \\
 \bottomrule
-\end{tabularx}
-\caption{Classification setup used in the later Stage 2 runs.}
-\label{tab:clfresults}
+\end{tabular}
+\caption{Document-vs-query category classification comparison.}
+\label{tab:docquerycompare}
 \end{table}
 
-The two main takeaways are straightforward. First, the classifier is not the retrieval engine; it is a support signal used to bias reranking. Second, stronger category prediction does not automatically imply better retrieval, because the way the category signal is applied matters more than the raw classifier score itself.
+So the answer is \textbf{no}: the classifier does \emph{not} work equally well on documents and queries. It transfers well to queries, but the diagnostic query accuracy is lower than the held-out document accuracy, which is consistent with the fact that queries are much shorter and more ambiguous than full documents.
 
 \section{Using the Classifier to Improve Retrieval}
 
-The professor asks how the classifier can be integrated into the retrieval system. The important point in the final report is that three different truths are relevant here:
+The classifier is integrated into retrieval in two ways:
+\begin{itemize}
+    \item \textbf{hard category filtering}, which restricts retrieval to documents from the predicted category;
+    \item \textbf{soft category-aware reranking}, which keeps the candidate list and adds a category-match bonus during cross-encoder reranking.
+\end{itemize}
+
+For this part of the report, we keep three sources of evidence separate:
 
 \begin{itemize}
     \item \textbf{saved offline evaluation outputs} from \texttt{retrieval-evaluation.ipynb};
-    \item \textbf{current submission-code defaults} from \texttt{src/config.py} and \texttt{kaggle-submission.ipynb};
-    \item the \textbf{user-reported public Kaggle score} \(0.62337\).
+    \item \textbf{the current submission configuration} from \texttt{src/config.py} and \texttt{kaggle-submission.ipynb};
+    \item the \textbf{public Kaggle score} \(0.62419\).
 \end{itemize}
 
-These should not be collapsed into one frozen ``current config.'' The saved offline comparison tables are the source of metrics such as \(0.624939\), \(K=7500\), and rerank head size \(=30\). The current code defaults are the source of values such as \texttt{submit\_top\_k=12500}, \texttt{rerank\_top\_m=45}, \texttt{category\_bonus=0.5}, and \texttt{CLASSIFIER\_USE\_QUERY\_TAGS=True}. The public Kaggle score \(0.62337\) is an external leaderboard result and is not reproducible from the saved repo outputs alone.
+We keep them separate so that we do not pretend everything came from one identical run. The saved offline tables are the source of the Phase 2 metrics below. The submission notebook shows the current export pipeline and the regenerated CSV preview. The public Kaggle score \(0.62419\) is an external leaderboard result and cannot be reproduced from the local notebooks alone.
 
 \begin{table}[H]
 \centering
 \small
 \begin{tabularx}{\linewidth}{p{0.20\linewidth}p{0.34\linewidth}Y}
 \toprule
-Run context & Relevant settings tied to the reported result & Impact on interpretation \\
+Run context & Relevant settings tied to the result & Impact on interpretation \\
 \midrule
-Saved offline evaluation run & \(K=7500\), cross-encoder reranking enabled, reranked head size \(=30\), category signal tested both as hard filter and as soft bonus & Measures how Stage 2 choices affect Recall, MRR, and combined score on labeled queries. Useful for explaining \emph{why} reranking helps and \emph{why} hard filtering fails. \\
-Current submission-code defaults & \texttt{submit\_top\_k=12500}, \texttt{rerank\_top\_m=45}, \texttt{category\_bonus=0.5}, \texttt{CLASSIFIER\_USE\_QUERY\_TAGS=True} & Describes how the code would currently export and rerank a submission. These defaults explain the present pipeline shape, but they are not the source of the saved offline metrics. \\
-External Kaggle result & Public leaderboard score \(=0.62337\) reported by the team & Confirms that the selected Stage 2 direction transfers to the hidden test set, but should not be read as a literal replay of the saved offline evaluation run. \\
+Saved offline evaluation run & All 327 labeled queries, \(K=12500\), \texttt{rerank\_top\_m=45}, \texttt{category\_bonus=0.5}, TF-IDF/BM25+/embedding all compared & Measures how Stage 2 choices affect Recall, MRR, and combined score on labeled queries. This is the source of the Phase 2 comparison tables. \\
+Current submission notebook & \texttt{final\_model=embedding}, \texttt{submit\_top\_k=12500}, \texttt{rerank\_top\_m=45}, \texttt{category\_bonus=0.5}, query tags enabled for classification & Describes how the code now exports and reranks \texttt{solutions\_SeaFour.csv}. These settings explain the current pipeline shape, but they are not themselves an offline benchmark. \\
+External Kaggle result & Public leaderboard score \(=0.62419\) & Confirms that the selected Stage 2 direction transfers to the hidden test set, but should not be read as a literal replay of the saved offline evaluation run. \\
 \bottomrule
 \end{tabularx}
-\caption{Offline outputs, current code defaults, and the public Kaggle result are reported as separate truth sources.}
+\caption{Offline outputs, the current submission configuration, and the public Kaggle result are reported as separate sources of evidence.}
 \label{tab:runcontexts}
-\end{table}
-
-Many values were explored during experiments, but the report does not need to narrate each one. What matters is their \emph{effect}. Retrieval depth changes the candidate pool and recall ceiling, rerank depth changes how much of the head the cross-encoder can repair, and the category signal can either help as a soft prior or hurt badly when used as a hard gate.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabularx}{\linewidth}{l Y Y}
-\toprule
-Component & Stage 2 mechanism & Practical effect \\
-\midrule
-First-stage retriever & \texttt{all-MiniLM-L6-v2} embeddings & Strong baseline recall means Stage 2 is mainly about repairing order, not discovering entirely new candidates. \\
-Query classifier & TF-IDF + LinearSVC with \texttt{title + text + tags} & Produces a category hint that can either guide reranking or remove useful candidates if applied too aggressively. \\
-Soft category bonus & Added only when predicted query category matches document category & Helps as a weak prior without forcing the ranking to collapse onto one class. \\
-Cross-encoder & \texttt{cross-encoder/ms-marco-MiniLM-L6-v2} & Improves top-of-list ordering by scoring query-document pairs jointly. \\
-Rerank depth & Only the head of the list is reranked & Deeper reranking can repair more of the list, but costs more runtime. \\
-\bottomrule
-\end{tabularx}
-\caption{Behavior-level view of the Stage 2 mechanisms, independent of one exact hyperparameter snapshot.}
-\label{tab:phase2config}
 \end{table}
 
 \subsection{Offline Stage 2 results and what they mean}
 
-The saved outputs in \texttt{retrieval-evaluation.ipynb} provide the clearest offline comparison of the main Stage 2 variants. The important numbers are shown in Table~\ref{tab:phase2results}.
+The saved outputs in \texttt{retrieval-evaluation.ipynb} provide the clearest offline comparison of the main Stage 2 variants. Table~\ref{tab:phase2results} reports all three first-stage models and all five classifier-aware variants at \(K=12500\).
 
 \begin{table}[H]
 \centering
-\small
-\begin{tabularx}{\linewidth}{Y c c c c c c}
+\scriptsize
+\begin{tabular}{l l r r r r r}
 \toprule
-Variant & Recall & Precision & MRR & Accuracy & Combined score & \(\Delta\) vs.\ baseline \\
+Model & Variant & Recall & Precision & MRR & Combined score & \(\Delta\) vs.\ baseline \\
 \midrule
-Baseline embedding & 0.947617 & 0.001099 & 0.474507 & 0.926606 & 0.587457 & 0.000000 \\
-Category filtered & 0.880766 & 0.001073 & 0.450931 & 0.926606 & 0.564844 & -0.022613 \\
-Reranked only & 0.947617 & 0.001099 & 0.622633 & 0.926606 & 0.624489 & +0.037032 \\
-Reranked + category bonus & \textbf{0.947617} & \textbf{0.001099} & \textbf{0.624435} & \textbf{0.926606} & \textbf{0.624939} & \textbf{+0.037482} \\
-Category filtered + rerank & 0.880766 & 0.001073 & 0.584309 & 0.926606 & 0.598189 & +0.010732 \\
+TF-IDF & baseline & 0.790170 & 0.000490 & 0.262707 & 0.494993 & 0.000000 \\
+TF-IDF & category filtered & 0.795661 & 0.000535 & 0.253238 & 0.494010 & -0.000983 \\
+TF-IDF & reranked & 0.790170 & 0.000490 & 0.478497 & 0.548940 & +0.053947 \\
+TF-IDF & reranked + category bonus & 0.790170 & 0.000490 & 0.480366 & 0.549408 & +0.054415 \\
+TF-IDF & category filtered + rerank & 0.795661 & 0.000535 & 0.472139 & 0.548735 & +0.053742 \\
+\midrule
+BM25+ & baseline & 0.717214 & 0.000449 & 0.282023 & 0.481573 & 0.000000 \\
+BM25+ & category filtered & 0.737898 & 0.000502 & 0.269339 & 0.483586 & +0.002013 \\
+BM25+ & reranked & 0.717214 & 0.000449 & 0.467999 & 0.528067 & +0.046494 \\
+BM25+ & reranked + category bonus & 0.717214 & 0.000449 & 0.468184 & 0.528113 & +0.046540 \\
+BM25+ & category filtered + rerank & 0.737898 & 0.000502 & 0.429715 & 0.523680 & +0.042107 \\
+\midrule
+Embedding & baseline & 0.965746 & 0.000685 & 0.474507 & 0.591886 & 0.000000 \\
+Embedding & category filtered & 0.905954 & 0.000657 & 0.442439 & 0.568914 & -0.022972 \\
+Embedding & reranked & 0.965746 & 0.000685 & 0.643416 & 0.634113 & +0.042227 \\
+Embedding & reranked + category bonus & \textbf{0.965746} & \textbf{0.000685} & \textbf{0.648262} & \textbf{0.635325} & \textbf{+0.043439} \\
+Embedding & category filtered + rerank & 0.905954 & 0.000657 & 0.601620 & 0.608709 & +0.016823 \\
 \bottomrule
-\end{tabularx}
-\caption{Offline Stage 2 comparison from \texttt{retrieval-evaluation.ipynb}.}
+\end{tabular}
+\caption{Offline Stage 2 comparison from \texttt{retrieval-evaluation.ipynb} at \(K=12500\).}
 \label{tab:phase2results}
 \end{table}
 
-These results support four clear conclusions.
+These results point to five main conclusions.
 
 \begin{enumerate}
-    \item \textbf{The first stage already finds most of the relevant material.} The baseline embedding system reaches Recall \(=0.947617\), so the main weakness is not coverage.
-    \item \textbf{Reranking helps by fixing order near the top.} Recall and Precision stay essentially unchanged, while MRR jumps from \(0.474507\) to \(0.624435\). This is exactly the pattern expected from a good second-stage reranker.
-    \item \textbf{Hard category filtering hurts because it removes candidates.} The category-filtered variant drops Recall from \(0.947617\) to \(0.880766\), which is too costly even before reranking is applied.
-    \item \textbf{The category signal works best as a soft bonus.} Adding the bonus on top of reranking improves the combined score slightly, from \(0.624489\) to \(0.624939\), without the heavy recall damage caused by hard filtering.
+    \item \textbf{The best overall offline result is the embedding retriever with reranking and a soft category bonus.} It reaches a combined score of \(\mathbf{0.635325}\) with MRR \(=0.648262\).
+    \item \textbf{Reranking is the main source of Phase 2 gains for every first-stage model.} Relative to each baseline, reranked + bonus improves the combined score by \(+0.054415\) for TF-IDF, \(+0.046540\) for BM25+, and \(+0.043439\) for embeddings.
+    \item \textbf{The soft category bonus helps, but only slightly.} For all three first-stage models, reranked + bonus is a little better than reranked-only, which means the category signal is useful as a weak prior rather than as a dominant score.
+    \item \textbf{Hard category filtering is model-dependent and especially risky for embeddings.} It is slightly positive for BM25+, nearly neutral to slightly negative for TF-IDF, and clearly harmful for embeddings, where Recall drops from \(0.965746\) to \(0.905954\).
+    \item \textbf{Category-filtered + rerank is never the best option.} It improves on the baseline, but it always remains below reranking the unfiltered candidate set with a soft category bonus.
 \end{enumerate}
 
-\subsection{Cross-encoder reranker problems}
+\subsection{Cross-encoder reranker diagnostics}
 
-The cross-encoder helped the project, but the important point is not that one particular value was ``the best forever.'' The important point is \emph{why} reranking helped and \emph{why} some variants failed.
+The supplementary notebook \texttt{reranker-evaluation.ipynb} gives a useful closer look at the reranker. On category-filtered embedding candidates, it improves the combined score from \(0.568914\) to \(0.608709\), which again shows that reranking helps the ordering near the top of the list. At the same time, the notebook also shows concrete failure cases.
 
 \begin{enumerate}
-    \item \textbf{Its benefit is rank repair, not candidate discovery.} The cross-encoder improves MRR because it reorders a strong embedding candidate set. It does not create new recall by itself; if a relevant document never enters the candidate pool, reranking cannot rescue it.
-    \item \textbf{Rerank depth changes both quality and cost.} Reranking more of the list gives the cross-encoder more opportunities to repair ranking mistakes, but it also increases runtime. This is why the exact rerank depth matters mainly through its effect on how much of the head can be corrected.
-    \item \textbf{The category classifier is useful as a soft signal, but risky as a hard gate.} The offline results show this directly: hard category filtering drops Recall to \(0.880766\), while a soft category bonus preserves the strong recall of the embedding baseline and still gives a small gain.
-    \item \textbf{Offline gains are more optimistic than Kaggle gains.} The offline Stage 2 comparison uses labeled training queries, while Kaggle evaluates on unseen hidden queries. That is why the offline score \(0.624939\) is useful for selecting the direction of the pipeline, but the public leaderboard score remains the final external check.
+    \item \textbf{Its main benefit is rank repair, not candidate discovery.} MRR rises sharply while Recall usually stays fixed, which is exactly the signature of a reranker working on an already-strong candidate set.
+    \item \textbf{Average gains do not prevent per-query failures.} The reranker notebook includes a query for which the first relevant document is pushed down from rank \(1\) to rank \(30\), even though the reranked system is better on average.
+    \item \textbf{The classifier is safest as a soft signal.} The reranker diagnostics and the full Phase 2 table agree that a weak category bonus is helpful, while aggressive hard filtering can remove relevant material before the reranker ever sees it.
 \end{enumerate}
 
-For those reasons, the cross-encoder should be described as a practical second-stage repair model. The lesson is not ``use exactly value X,'' but rather ``use reranking to improve ordering, and use the classifier softly rather than aggressively.''
+For these reasons, we describe the cross-encoder as a practical second-stage repair model. The main takeaway is not ``use one fixed value forever,'' but rather ``use reranking to improve ordering, and use the classifier as a soft signal instead of an aggressive filter.''
 
 \section{Final Submission Result}
-
-The final report should separate the strongest offline Stage 2 result, the current submission-code defaults, and the public Kaggle result.
 
 \begin{table}[H]
 \centering
 \small
 \begin{tabularx}{\linewidth}{p{0.26\linewidth}p{0.22\linewidth}Y}
 \toprule
-Truth source & Evidence & Interpretation \\
+Source & Evidence & Interpretation \\
 \midrule
-Saved offline evaluation run & \textbf{0.624939} & Best measured Stage 2 combined score from \texttt{retrieval-evaluation.ipynb}; this is the clearest evidence for what helped and what hurt offline. \\
-Current submission-code defaults & \texttt{top\_k=12500}, \texttt{top\_m=45}, bonus \(=0.5\) & Describes what the code would export and rerank if a submission were generated now; these defaults are not the source of the saved offline score. \\
-External public Kaggle result & \textbf{0.62337} & Hidden-test leaderboard result reported by the team; useful as the external check, but not a repo-verifiable replay of one frozen config. \\
+Saved offline evaluation run & \textbf{0.635325} & Best measured Stage 2 combined score from \texttt{retrieval-evaluation.ipynb}; it comes from the embedding retriever with reranking and a soft category bonus. \\
+Current submission notebook & \texttt{final\_model=embedding}, \texttt{top\_k=12500}, \texttt{top\_m=45}, bonus \(=0.5\), tags enabled & Describes what \texttt{kaggle-submission.ipynb} now exports. In the saved run, the notebook predicts 141 test categories, reranks 141 queries, and writes \texttt{solutions\_SeaFour.csv}. \\
+External public Kaggle result & \textbf{0.62419} & Hidden-test leaderboard result. It is a useful external check, but it should not be read as an exact replay of one local run. \\
 \bottomrule
 \end{tabularx}
-\caption{Offline metrics, current code defaults, and the public Kaggle score are reported separately.}
+\caption{Offline metrics, the submission notebook run, and the public Kaggle score are reported separately.}
 \label{tab:finalscores}
 \end{table}
 
-The two scores \(0.624939\) and \(0.62337\) are close, which is encouraging: the offline comparison identified the right \emph{direction} for Stage 2, and the public leaderboard result supports that direction externally. At the same time, the report is intentionally not claiming that the saved offline metrics, the current code defaults, and the public Kaggle score all came from one identical frozen configuration.
+The two scores \(0.635325\) and \(0.62419\) are reasonably close, which is encouraging. The offline comparison pointed us toward a strong Stage 2 direction, and the public leaderboard result supports that direction from the hidden test side. At the same time, the report does \emph{not} claim that the offline tables, the submission notebook, and the Kaggle score all came from one identical run.
 
 \begin{figure}[H]
 \centering
@@ -621,7 +683,7 @@ The two scores \(0.624939\) and \(0.62337\) are close, which is encouraging: the
 \node[box, below=0.95cm of docs] (retriever) {TF-IDF / BM25+ / Embedding retriever};
 \node[box, below=0.95cm of queries] (clf) {TF-IDF + LinearSVC\\query classifier\\(\texttt{title + text + tags})};
 \node[merge, below=1.1cm of $(retriever)!0.5!(clf)$] (rerank) {Retrieve a deep candidate list, score only the head with a cross-encoder, add a soft category-match bonus, and rerank};
-\node[merge, below=0.95cm of rerank] (submit) {Current submission-code defaults\\$\rightarrow$ export \texttt{solutions\_SeaFour.csv}};
+\node[merge, below=0.95cm of rerank] (submit) {Submission notebook\\$\rightarrow$ export \texttt{solutions\_SeaFour.csv}};
 
 \draw[accent, thick, -{Latex[length=3mm]}] (docs) -- (retriever);
 \draw[accent, thick, -{Latex[length=3mm]}] (queries) -- (clf);
@@ -636,7 +698,7 @@ The two scores \(0.624939\) and \(0.62337\) are close, which is encouraging: the
 
 \section{Reproducibility}
 
-The final notebook includes several reproducibility choices:
+The notebooks include several choices that make reruns easier:
 \begin{itemize}
     \item cached document embeddings;
     \item cached TF-IDF and BM25 artifacts;
@@ -647,7 +709,7 @@ The final notebook includes several reproducibility choices:
     \item notebook-level documentation through section markdown and structured outputs.
 \end{itemize}
 
-A lightweight cross-encoder reranker is enabled in the current code defaults, but the report now distinguishes the saved offline evaluation run from the current submission configuration explicitly. The offline reranker diagnostics explain the impact of Stage 2 choices, while the public Kaggle score remains an external result reported by the team.
+A lightweight cross-encoder reranker is enabled in the current code defaults, but in this report we still separate the saved offline evaluation run from the current submission setup. The reranker notebook explains the effect of the main Stage 2 choices, while the public Kaggle score remains an external check.
 
 \section{AI Usage Declaration}
 
@@ -662,15 +724,15 @@ The final methodological choices, interpretations, and submission artifacts rema
 
 \section{Future Improvements}
 
-The most important next step is better reranker development. The current cross-encoder already improves ordering near the top of the list, but its configuration is still closer to a practical competition setup than to a deeply optimized second-stage ranking system. Future work should therefore focus on more systematic tuning of rerank depth, candidate-set size, score calibration, and the way cross-encoder scores are blended with first-stage retrieval signals. A stronger reranker model could also be explored, but the larger point is to make Stage 2 more deliberate rather than simply deeper.
+The most important next step is better reranker development. The current cross-encoder already improves the top of the ranking, but its setup is still closer to a practical competition pipeline than to a deeply optimized second-stage ranking system. Future work should focus on more systematic tuning of rerank depth, candidate-set size, score calibration, and how cross-encoder scores are combined with first-stage retrieval signals. A stronger reranker model could also be explored, but the bigger goal is to make Stage 2 more deliberate instead of simply deeper.
 
-This is also the path toward a genuinely strong information retrieval system. A real deployment should not stop at ``retrieve many documents and export them.'' After broad candidate generation and reranking, the system should narrow the final output to a small, high-quality set using explicit logic such as top-\(n\) cutoffs, score thresholds, confidence-based filtering, deduplication, category-aware constraints, or task-specific ranking rules. In that sense, the current pipeline demonstrates a strong competition direction, but it should not yet be described as a complete production retrieval architecture.
+This is also the path toward a genuinely strong information retrieval system. In a real deployment, the goal would not be to retrieve many documents and stop there. After broad candidate generation and reranking, the system should narrow the final output to a smaller and higher-quality set using explicit logic such as top-\(n\) cutoffs, score thresholds, confidence-based filtering, deduplication, category-aware constraints, or task-specific ranking rules. In that sense, the current pipeline shows a strong competition direction, but it should not yet be described as a complete production retrieval architecture.
 
 \section{Conclusion}
 
-The authors acknowledge that a real information retrieval system should not expose or rely on a final output of \(12500\) documents. That depth was used here for competition-oriented performance rather than because it represents a realistic deployment target. In practical use, candidate generation can be broad, but the final returned set should be narrowed after reranking through explicit decision logic such as top-\(n\) cutoffs, score thresholds, confidence rules, or application-specific ranking criteria. Because rigorous reranker tuning is itself a difficult topic, the project intentionally leaves the current system in a competition-oriented state rather than claiming that it is already production-ready.
+We do not claim that returning \(12500\) documents would make sense in a real application. We used that depth here because the competition rewards broad coverage, not because it would be a realistic final user output. In practice, candidate generation can be wide, but the final returned set should be narrowed after reranking with explicit decision logic such as top-\(n\) cutoffs, score thresholds, confidence rules, or application-specific ranking criteria. Since careful reranker tuning is already a difficult task on its own, we leave the current system in a competition-oriented state instead of presenting it as production-ready.
 
-The final notebook and this report align with the full brief:
+The notebook and this report align with the full brief:
 \begin{itemize}
     \item they present the dataset and preprocessing explicitly;
     \item they compare TF-IDF, BM25+, and embeddings directly;
@@ -680,6 +742,6 @@ The final notebook and this report align with the full brief:
     \item they preserve a reproducible path to Kaggle submission.
 \end{itemize}
 
-Empirically, the strongest \textbf{saved offline} Stage 2 variant in the project is the embedding retriever with reranking and a soft category bonus, which reached \textbf{0.624939} in \texttt{retrieval-evaluation.ipynb}. The \textbf{current code defaults} meanwhile describe a later submission configuration with \texttt{submit\_top\_k=12500} and \texttt{rerank\_top\_m=45}. The \textbf{public Kaggle score} of \textbf{0.62337} is an external result reported by the team. The important conclusion is not that every tuned value must be copied exactly, but that the project learned the right interaction between its components: semantic retrieval provides the candidate quality, the cross-encoder repairs ranking near the top, and the category classifier helps most when used as a soft signal rather than a hard filter. That is the defensible final story of the project.
+Empirically, the strongest \textbf{saved offline} Stage 2 variant in the project is the embedding retriever with reranking and a soft category bonus, which reached \textbf{0.635325} in \texttt{retrieval-evaluation.ipynb}. The \textbf{submission notebook run} reports \texttt{final\_model=embedding}, \texttt{submit\_top\_k=12500}, \texttt{rerank\_top\_m=45}, \texttt{category\_bonus=0.5}, and writes \texttt{solutions\_SeaFour.csv}. The \textbf{public Kaggle score} of \textbf{0.62419} remains an external result. The main conclusion is not that every tuned value has to be copied exactly, but that the project learned the right interaction between its components: semantic retrieval gives strong candidates, the cross-encoder improves their order near the top, and the category classifier helps most when it is used as a soft signal rather than a hard filter. That is the clearest final story of the project.
 
 \end{document}
