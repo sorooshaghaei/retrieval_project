@@ -106,3 +106,8 @@ report/build/
 # Project outputs
 scores/
 solutions_SeaFour.csv
+reports/retrieval_project_report.out
+reports/retrieval_project_report.fls
+reports/retrieval_project_report.fdb_latexmk
+reports/retrieval_project_report.aux
+reports/retrieval_project_report.synctex.gz
